@@ -1,0 +1,13 @@
+{
+  "KPlugin": {
+    "Id": "com.github.lubdhak7414.kdoit",
+    "Name": "KDoit",
+    "Description": "To-do list widget with nested sub-tasks, priorities, and due dates",
+    "Version": "0.1.0",
+    "Category": "Productivity",
+    "Icon": "view-task",
+    "Authors": [{ "Name": "Safwan Usaid Lubdhak", "Email": "hello@saf1.me" }]
+  },
+  "X-Plasma-API-Minimum-Version": "6.0",
+  "KPackageStructure": "Plasma/Applet"
+}
