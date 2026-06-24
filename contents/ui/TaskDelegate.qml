@@ -172,7 +172,9 @@ PlasmaComponents.ItemDelegate {
         }
 
         PlasmaComponents.CheckBox {
-            checked: delegate.done
+            Binding on checked {
+                value: delegate.done
+            }
             onToggled: {
                 delegate.listView.model.setProperty(delegate.index, "done", checked)
                 delegate.taskChanged()

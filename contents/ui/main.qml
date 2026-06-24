@@ -61,6 +61,8 @@ PlasmoidItem {
     }
 
     function enterSublist(taskIndex) {
+        if (taskIndex < 0 || taskIndex >= taskModel.count)
+            return
         dismissUndo()
         navigationStack.push({ title: currentTitle })
         navigationStackChanged()
@@ -200,19 +202,19 @@ PlasmoidItem {
                     onToggled: {
                         root.searchActive = checked
                         if (!checked)
-                            root.searchText = ""
+                            searchField.text = ""
                     }
                 }
             }
 
             PlasmaComponents.TextField {
+                id: searchField
                 Layout.fillWidth: true
                 visible: root.searchActive
                 placeholderText: i18n("Search tasks...")
-                text: root.searchText
                 onTextChanged: root.searchText = text
                 Keys.onEscapePressed: {
-                    root.searchText = ""
+                    text = ""
                     root.searchActive = false
                 }
             }
@@ -227,6 +229,7 @@ PlasmoidItem {
             Controls.ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                visible: root.visibleCount > 0
                 clip: true
                 contentWidth: availableWidth
 
@@ -276,9 +279,6 @@ PlasmoidItem {
                         onDropping: {
                             taskList.isDropping = true
                             taskList.resetAllTransforms()
-                            taskList.currentDragActive = false
-                            taskList.dragSourceIndex = -1
-                            taskList.dropTargetIndex = -1
                             dropResetTimer.restart()
                         }
                     }
@@ -286,7 +286,12 @@ PlasmoidItem {
                     Timer {
                         id: dropResetTimer
                         interval: 50
-                        onTriggered: taskList.isDropping = false
+                        onTriggered: {
+                            taskList.isDropping = false
+                            taskList.currentDragActive = false
+                            taskList.dragSourceIndex = -1
+                            taskList.dropTargetIndex = -1
+                        }
                     }
                 }
             }

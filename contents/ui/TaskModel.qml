@@ -60,6 +60,8 @@ ListModel {
     }
 
     function addTask(title, priority) {
+        if (title.trim() === "")
+            return
         append({
             title: title,
             done: false,
