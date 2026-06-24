@@ -54,7 +54,14 @@ PlasmoidItem {
         taskModel.setTaskProperty(activeSublistTask, "sublist", arr)
     }
 
+    function dismissUndo() {
+        lastDeleted = null
+        undoMessage.visible = false
+        undoTimer.stop()
+    }
+
     function enterSublist(taskIndex) {
+        dismissUndo()
         navigationStack.push({ title: currentTitle })
         navigationStackChanged()
         var task = taskModel.get(taskIndex)
@@ -70,6 +77,7 @@ PlasmoidItem {
     function goBack() {
         if (navigationStack.length === 0)
             return
+        dismissUndo()
         var entry = navigationStack.pop()
         navigationStackChanged()
         activeSublistTask = null
@@ -244,6 +252,7 @@ PlasmoidItem {
                     delegate: TaskDelegate {
                         matched: root.matchesFilter(title, done)
                         dragEnabled: !root.isFiltering && !root.isSublistView()
+                        isSublistItem: root.isSublistView()
                         onTaskDeleted: root.deleteCurrent(index)
                         onDrillIntoSublist: function (taskIndex) {
                             if (!root.isSublistView())
@@ -253,6 +262,8 @@ PlasmoidItem {
                             root._updateTrigger++
                             if (root.isSublistView())
                                 root.syncSublist()
+                            else
+                                taskModel.save()
                         }
                         onDragStarted: function (idx) {
                             taskList.dragSourceIndex = idx

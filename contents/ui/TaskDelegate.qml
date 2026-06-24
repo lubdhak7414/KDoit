@@ -19,6 +19,7 @@ PlasmaComponents.ItemDelegate {
     property real gridSize: 52
     property bool matched: true
     property bool dragEnabled: true
+    property bool isSublistItem: false
 
     property bool isDragging: false
     property real dragOffsetY: 0
@@ -173,12 +174,13 @@ PlasmaComponents.ItemDelegate {
         PlasmaComponents.CheckBox {
             checked: delegate.done
             onToggled: {
-                delegate.listView.model.setTaskProperty(delegate.index, "done", checked)
+                delegate.listView.model.setProperty(delegate.index, "done", checked)
                 delegate.taskChanged()
             }
         }
 
         Rectangle {
+            visible: !delegate.isSublistItem
             implicitWidth: 8
             implicitHeight: 8
             radius: 4
@@ -234,12 +236,13 @@ PlasmaComponents.ItemDelegate {
 
         Controls.Menu {
             title: i18n("Due date")
+            visible: !delegate.isSublistItem
 
             Controls.MenuItem {
                 text: i18n("Today")
                 onTriggered: {
                     var d = new Date()
-                    delegate.listView.model.setTaskProperty(delegate.index, "dueDate", delegate.toIso(d))
+                    delegate.listView.model.setProperty(delegate.index, "dueDate", delegate.toIso(d))
                     delegate.taskChanged()
                 }
             }
@@ -248,7 +251,7 @@ PlasmaComponents.ItemDelegate {
                 onTriggered: {
                     var d = new Date()
                     d.setDate(d.getDate() + 1)
-                    delegate.listView.model.setTaskProperty(delegate.index, "dueDate", delegate.toIso(d))
+                    delegate.listView.model.setProperty(delegate.index, "dueDate", delegate.toIso(d))
                     delegate.taskChanged()
                 }
             }
@@ -259,7 +262,7 @@ PlasmaComponents.ItemDelegate {
             Controls.MenuItem {
                 text: i18n("Delete date")
                 onTriggered: {
-                    delegate.listView.model.setTaskProperty(delegate.index, "dueDate", "")
+                    delegate.listView.model.setProperty(delegate.index, "dueDate", "")
                     delegate.taskChanged()
                 }
             }
@@ -267,25 +270,26 @@ PlasmaComponents.ItemDelegate {
 
         Controls.Menu {
             title: i18n("Priority")
+            visible: !delegate.isSublistItem
 
             Controls.MenuItem {
                 text: i18n("High")
                 onTriggered: {
-                    delegate.listView.model.setTaskProperty(delegate.index, "priority", 2)
+                    delegate.listView.model.setProperty(delegate.index, "priority", 2)
                     delegate.taskChanged()
                 }
             }
             Controls.MenuItem {
                 text: i18n("Medium")
                 onTriggered: {
-                    delegate.listView.model.setTaskProperty(delegate.index, "priority", 1)
+                    delegate.listView.model.setProperty(delegate.index, "priority", 1)
                     delegate.taskChanged()
                 }
             }
             Controls.MenuItem {
                 text: i18n("Low")
                 onTriggered: {
-                    delegate.listView.model.setTaskProperty(delegate.index, "priority", 0)
+                    delegate.listView.model.setProperty(delegate.index, "priority", 0)
                     delegate.taskChanged()
                 }
             }
@@ -336,7 +340,7 @@ PlasmaComponents.ItemDelegate {
             var m = monthSpin.value
             var day = daySpin.value
             var iso = yearSpin.value + "-" + (m < 10 ? "0" + m : m) + "-" + (day < 10 ? "0" + day : day)
-            delegate.listView.model.setTaskProperty(delegate.index, "dueDate", iso)
+            delegate.listView.model.setProperty(delegate.index, "dueDate", iso)
             delegate.taskChanged()
         }
 
@@ -371,7 +375,7 @@ PlasmaComponents.ItemDelegate {
         onAccepted: {
             var text = renameField.text.trim()
             if (text.length > 0) {
-                delegate.listView.model.setTaskProperty(delegate.index, "title", text)
+                delegate.listView.model.setProperty(delegate.index, "title", text)
                 delegate.taskChanged()
             }
         }
