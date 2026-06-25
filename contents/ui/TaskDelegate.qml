@@ -16,7 +16,7 @@ PlasmaComponents.ItemDelegate {
     required property var sublist
 
     property ListView listView: ListView.view
-    property real gridSize: 52
+    property real gridSize: 40
     property bool matched: true
     property bool dragEnabled: true
     property bool isSublistItem: false
@@ -91,7 +91,25 @@ PlasmaComponents.ItemDelegate {
         var parts = d.split("-")
         if (parts.length !== 3)
             return d
-        return parts[2] + "/" + parts[1]
+        var numeric = parts[2] + "/" + parts[1]
+        if (!plasmoid.configuration.verboseDates)
+            return numeric
+        var year = parseInt(parts[0])
+        var month = parseInt(parts[1])
+        var day = parseInt(parts[2])
+        var due = new Date(year, month - 1, day)
+        if (due.getFullYear() !== year || due.getMonth() !== month - 1 || due.getDate() !== day)
+            return numeric
+        var now = new Date()
+        var today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        var diff = Math.round((due - today) / 86400000)
+        if (diff === 0)
+            return i18n("Today")
+        if (diff === 1)
+            return i18n("Tomorrow")
+        if (diff === -1)
+            return i18n("Yesterday")
+        return numeric
     }
 
     function resetTransform() {
@@ -116,10 +134,17 @@ PlasmaComponents.ItemDelegate {
         }
     }
 
+    function openMenu() {
+        if (delegate.isSublistItem)
+            sublistMenu.popup()
+        else
+            contextMenu.popup()
+    }
+
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.RightButton
-        onClicked: contextMenu.popup()
+        onClicked: delegate.openMenu()
     }
 
     RowLayout {
@@ -233,7 +258,7 @@ PlasmaComponents.ItemDelegate {
             text: i18n("Edit task")
             opacity: delegate.hovered ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: 120 } }
-            onClicked: contextMenu.popup()
+            onClicked: delegate.openMenu()
         }
     }
 
@@ -243,7 +268,6 @@ PlasmaComponents.ItemDelegate {
 
         Controls.Menu {
             title: i18n("Due date")
-            enabled: !delegate.isSublistItem
 
             Controls.MenuItem {
                 text: i18n("Today")
@@ -277,7 +301,6 @@ PlasmaComponents.ItemDelegate {
 
         Controls.Menu {
             title: i18n("Priority")
-            enabled: !delegate.isSublistItem
 
             Controls.MenuItem {
                 text: i18n("High")
@@ -301,6 +324,24 @@ PlasmaComponents.ItemDelegate {
                 }
             }
         }
+
+        Controls.MenuItem {
+            text: i18n("Rename...")
+            onTriggered: {
+                renameField.text = delegate.title
+                renameDialog.open()
+            }
+        }
+
+        Controls.MenuItem {
+            text: i18n("Delete")
+            onTriggered: delegate.taskDeleted()
+        }
+    }
+
+    Controls.Menu {
+        id: sublistMenu
+        popupType: Controls.Popup.Window
 
         Controls.MenuItem {
             text: i18n("Rename...")

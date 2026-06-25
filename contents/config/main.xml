@@ -17,5 +17,9 @@
             <label>Whether to hide completed tasks from the list</label>
             <default>false</default>
         </entry>
+        <entry name="verboseDates" type="Bool">
+            <label>Show due dates as Today/Tomorrow/Yesterday when near, otherwise always a numeric date</label>
+            <default>true</default>
+        </entry>
     </group>
 </kcfg>

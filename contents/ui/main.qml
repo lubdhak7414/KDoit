@@ -159,6 +159,44 @@ PlasmoidItem {
         undoTimer.stop()
     }
 
+    function sortTasks(mode) {
+        dismissUndo()
+        var rows = []
+        for (var i = 0; i < currentModel.count; i++) {
+            var t = currentModel.get(i)
+            var sub = []
+            for (var s = 0; s < t.sublist.length; s++)
+                sub.push({ title: t.sublist[s].title, done: t.sublist[s].done === true })
+            rows.push({
+                title: t.title, done: t.done, priority: t.priority,
+                category: t.category, createdAt: t.createdAt,
+                dueDate: t.dueDate, sublist: sub
+            })
+        }
+        rows.sort(function (a, b) {
+            if (mode === "priority")
+                return b.priority - a.priority || a.title.localeCompare(b.title)
+            if (mode === "dueDate") {
+                var ad = a.dueDate === "" ? "99999999" : a.dueDate
+                var bd = b.dueDate === "" ? "99999999" : b.dueDate
+                return ad < bd ? -1 : (ad > bd ? 1 : a.title.localeCompare(b.title))
+            }
+            if (mode === "title")
+                return a.title.localeCompare(b.title)
+            if (mode === "done")
+                return (a.done === b.done) ? 0 : (a.done ? 1 : -1)
+            return 0
+        })
+        currentModel.clear()
+        for (var j = 0; j < rows.length; j++)
+            currentModel.append(rows[j])
+        if (isSublistView())
+            syncSublist()
+        else
+            taskModel.save()
+        _updateTrigger++
+    }
+
     function matchesFilter(title, done) {
         if (plasmoid.configuration.hideCompleted && done)
             return false
@@ -205,6 +243,36 @@ PlasmoidItem {
                     text: root.currentTitle
                     elide: Text.ElideRight
                     Layout.fillWidth: true
+                }
+
+                PlasmaComponents.Button {
+                    icon.name: "view-sort-symbolic"
+                    flat: true
+                    display: PlasmaComponents.AbstractButton.IconOnly
+                    text: i18n("Sort")
+                    onClicked: sortMenu.popup()
+
+                    Controls.Menu {
+                        id: sortMenu
+                        popupType: Controls.Popup.Window
+
+                        Controls.MenuItem {
+                            text: i18n("Priority")
+                            onTriggered: root.sortTasks("priority")
+                        }
+                        Controls.MenuItem {
+                            text: i18n("Due date")
+                            onTriggered: root.sortTasks("dueDate")
+                        }
+                        Controls.MenuItem {
+                            text: i18n("Name")
+                            onTriggered: root.sortTasks("title")
+                        }
+                        Controls.MenuItem {
+                            text: i18n("Completed last")
+                            onTriggered: root.sortTasks("done")
+                        }
+                    }
                 }
 
                 PlasmaComponents.Button {
