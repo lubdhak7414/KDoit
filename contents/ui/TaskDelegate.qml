@@ -69,7 +69,12 @@ PlasmaComponents.ItemDelegate {
         var parts = dueDate.split("-")
         if (parts.length !== 3)
             return false
-        var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]))
+        var year = parseInt(parts[0])
+        var month = parseInt(parts[1])
+        var day = parseInt(parts[2])
+        var d = new Date(year, month - 1, day)
+        if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day)
+            return false
         return d < t
     }
 
@@ -165,7 +170,7 @@ PlasmaComponents.ItemDelegate {
                     delegate.dropping()
                     delegate.isDragging = false
                     delegate.dragOffsetY = 0
-                    if (from !== to)
+                    if (from !== to && typeof delegate.listView.model.moveTask === "function")
                         delegate.listView.model.moveTask(from, to)
                 }
             }

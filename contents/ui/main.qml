@@ -22,6 +22,8 @@ PlasmoidItem {
 
     property int visibleCount: {
         var _t = _updateTrigger
+        var _h = plasmoid.configuration.hideCompleted
+        var _s = searchText
         var n = 0
         for (var i = 0; i < currentModel.count; i++) {
             var item = currentModel.get(i)
@@ -111,12 +113,15 @@ PlasmoidItem {
             syncSublist()
         } else {
             var t = taskModel.get(index)
+            var subCopy = []
+            for (var s = 0; s < t.sublist.length; s++)
+                subCopy.push({ title: t.sublist[s].title, done: t.sublist[s].done === true })
             lastDeleted = {
                 index: index,
                 task: {
                     title: t.title, done: t.done, priority: t.priority,
                     category: t.category, createdAt: t.createdAt,
-                    dueDate: t.dueDate, sublist: t.sublist
+                    dueDate: t.dueDate, sublist: subCopy
                 }
             }
             taskModel.removeTask(index)
@@ -300,6 +305,14 @@ PlasmoidItem {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 visible: root.visibleCount === 0
+                message: root.currentModel.count > 0
+                    ? (root.searchText.length > 0
+                        ? i18n("No matching tasks")
+                        : i18n("All tasks completed"))
+                    : i18n("No tasks yet")
+                iconSource: root.currentModel.count > 0 && root.searchText.length > 0
+                    ? "search-symbolic"
+                    : "view-task"
             }
 
             Kirigami.InlineMessage {

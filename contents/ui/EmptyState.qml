@@ -6,8 +6,11 @@ import org.kde.kirigami as Kirigami
 ColumnLayout {
     spacing: Kirigami.Units.largeSpacing
 
+    property string message: i18n("No tasks yet")
+    property string iconSource: "view-task"
+
     Kirigami.Icon {
-        source: "view-task"
+        source: iconSource
         implicitWidth: 64
         implicitHeight: 64
         opacity: 0.6
@@ -15,7 +18,7 @@ ColumnLayout {
     }
 
     PlasmaComponents.Label {
-        text: i18n("No tasks yet")
+        text: message
         opacity: 0.7
         Layout.alignment: Qt.AlignHCenter
     }
