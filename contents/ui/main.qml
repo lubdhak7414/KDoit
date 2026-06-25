@@ -18,16 +18,27 @@ PlasmoidItem {
     property var activeSublistTask: null
     property int _updateTrigger: 0
 
-    property bool isFiltering: searchText.length > 0 || plasmoid.configuration.hideCompleted
+    property string categoryFilter: ""
+    property var distinctCategories: []
+    property var presetCategories: [
+        i18n("Work"),
+        i18n("Personal"),
+        i18n("Shopping"),
+        i18n("Health"),
+        i18n("Finance"),
+        i18n("Education")
+    ]
+    property bool isFiltering: searchText.length > 0 || plasmoid.configuration.hideCompleted || categoryFilter !== ""
 
     property int visibleCount: {
         var _t = _updateTrigger
         var _h = plasmoid.configuration.hideCompleted
         var _s = searchText
+        var _cf = categoryFilter
         var n = 0
         for (var i = 0; i < currentModel.count; i++) {
             var item = currentModel.get(i)
-            if (matchesFilter(item.title, item.done))
+            if (matchesFilter(item.title, item.done, item.category || ""))
                 n++
         }
         return n
@@ -39,6 +50,7 @@ PlasmoidItem {
 
     TaskModel {
         id: taskModel
+        Component.onCompleted: root.updateDistinctCategories()
     }
 
     ListModel {
@@ -139,6 +151,7 @@ PlasmoidItem {
             taskModel.removeTask(index)
         }
         _updateTrigger++
+        updateDistinctCategories()
         undoTimer.restart()
         undoMessage.visible = true
     }
@@ -155,6 +168,7 @@ PlasmoidItem {
         }
         lastDeleted = null
         _updateTrigger++
+        updateDistinctCategories()
         undoMessage.visible = false
         undoTimer.stop()
     }
@@ -195,12 +209,47 @@ PlasmoidItem {
         else
             taskModel.save()
         _updateTrigger++
+        updateDistinctCategories()
     }
 
-    function matchesFilter(title, done) {
+    function categoryColor(cat) {
+        if (cat === "")
+            return "transparent"
+        var hash = 5381
+        for (var i = 0; i < cat.length; i++)
+            hash = ((hash << 5) + hash + cat.charCodeAt(i)) & 0xFFFFFFFF
+        var hue = (hash >>> 0) % 360
+        return Qt.hsla(hue / 360, 0.7, 0.45, 1.0)
+    }
+
+    function categoryTextColor(cat) {
+        if (cat === "")
+            return "transparent"
+        return "#ffffff"
+    }
+
+    function updateDistinctCategories() {
+        var cats = {}
+        for (var i = 0; i < taskModel.count; i++) {
+            var c = taskModel.get(i).category
+            if (c !== "")
+                cats[c] = true
+        }
+        var arr = []
+        for (var k in cats)
+            arr.push(k)
+        arr.sort()
+        distinctCategories = arr
+        if (categoryFilter !== "" && cats[categoryFilter] === undefined)
+            categoryFilter = ""
+    }
+
+    function matchesFilter(title, done, cat) {
         if (plasmoid.configuration.hideCompleted && done)
             return false
         if (searchText.length > 0 && title.toLowerCase().indexOf(searchText.toLowerCase()) === -1)
+            return false
+        if (categoryFilter !== "" && cat !== categoryFilter)
             return false
         return true
     }
@@ -302,6 +351,62 @@ PlasmoidItem {
                 }
             }
 
+            Flow {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing / 2
+                visible: root.distinctCategories.length > 0 && !root.isSublistView()
+
+                Rectangle {
+                    width: allLabel.implicitWidth + Kirigami.Units.largeSpacing
+                    height: Kirigami.Units.gridUnit * 0.9
+                    radius: height / 2
+                    color: root.categoryFilter === "" ? Kirigami.Theme.highlightColor : Kirigami.Theme.viewBackgroundColor
+                    border.color: root.categoryFilter === "" ? Kirigami.Theme.highlightColor : Kirigami.Theme.disabledTextColor
+                    border.width: 1
+
+                    PlasmaComponents.Label {
+                        id: allLabel
+                        anchors.centerIn: parent
+                        text: i18n("All")
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        color: root.categoryFilter === "" ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.categoryFilter = ""
+                    }
+                }
+
+                Repeater {
+                    model: root.distinctCategories
+                    delegate: Rectangle {
+                        required property string modelData
+                        width: chipLabel.implicitWidth + Kirigami.Units.largeSpacing
+                        height: Kirigami.Units.gridUnit * 0.9
+                        radius: height / 2
+                        color: root.categoryFilter === modelData ? root.categoryColor(modelData) : Kirigami.Theme.viewBackgroundColor
+                        border.color: root.categoryFilter === modelData ? root.categoryColor(modelData) : Kirigami.Theme.disabledTextColor
+                        border.width: 1
+
+                        PlasmaComponents.Label {
+                            id: chipLabel
+                            anchors.centerIn: parent
+                            text: modelData
+                            font.pointSize: Kirigami.Theme.smallFont.pointSize
+                            color: root.categoryFilter === modelData ? root.categoryTextColor(modelData) : Kirigami.Theme.textColor
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.categoryFilter = (root.categoryFilter === modelData ? "" : modelData)
+                        }
+                    }
+                }
+            }
+
             AddTaskBar {
                 Layout.fillWidth: true
                 onAddRequested: function (title) {
@@ -336,7 +441,7 @@ PlasmoidItem {
                     }
 
                     delegate: TaskDelegate {
-                        matched: root.matchesFilter(title, done)
+                        matched: root.matchesFilter(title, done, category || "")
                         dragEnabled: !root.isFiltering && !root.isSublistView()
                         isSublistItem: root.isSublistView()
                         onTaskDeleted: root.deleteCurrent(index)
@@ -346,6 +451,7 @@ PlasmoidItem {
                         }
                         onTaskChanged: {
                             root._updateTrigger++
+                            root.updateDistinctCategories()
                             if (root.isSublistView())
                                 root.syncSublist()
                             else
@@ -384,11 +490,11 @@ PlasmoidItem {
                 Layout.fillHeight: true
                 visible: root.visibleCount === 0
                 message: root.currentModel.count > 0
-                    ? (root.searchText.length > 0
+                    ? (root.searchText.length > 0 || root.categoryFilter !== ""
                         ? i18n("No matching tasks")
                         : i18n("All tasks completed"))
                     : i18n("No tasks yet")
-                iconSource: root.currentModel.count > 0 && root.searchText.length > 0
+                iconSource: root.currentModel.count > 0 && (root.searchText.length > 0 || root.categoryFilter !== "")
                     ? "search-symbolic"
                     : "view-task"
             }

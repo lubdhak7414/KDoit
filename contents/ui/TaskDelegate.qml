@@ -222,6 +222,23 @@ PlasmaComponents.ItemDelegate {
                  : Kirigami.Theme.positiveTextColor
         }
 
+        Rectangle {
+            visible: delegate.category !== "" && !delegate.isSublistItem
+            implicitWidth: catLabel.implicitWidth + Kirigami.Units.largeSpacing
+            implicitHeight: catLabel.implicitHeight + Kirigami.Units.smallSpacing
+            radius: height / 2
+            color: root.categoryColor(delegate.category)
+            Layout.alignment: Qt.AlignVCenter
+
+            PlasmaComponents.Label {
+                id: catLabel
+                anchors.centerIn: parent
+                text: delegate.category
+                font.pointSize: Kirigami.Theme.smallFont.pointSize
+                color: root.categoryTextColor(delegate.category)
+            }
+        }
+
         PlasmaComponents.Label {
             text: delegate.title
             elide: Text.ElideRight
@@ -321,6 +338,42 @@ PlasmaComponents.ItemDelegate {
                 onTriggered: {
                     delegate.listView.model.setProperty(delegate.index, "priority", 0)
                     delegate.taskChanged()
+                }
+            }
+        }
+
+        Controls.Menu {
+            title: i18n("Category")
+
+            Controls.MenuItem {
+                text: i18n("None")
+                onTriggered: {
+                    delegate.listView.model.setProperty(delegate.index, "category", "")
+                    delegate.taskChanged()
+                }
+            }
+
+            Controls.MenuSeparator {}
+
+            Repeater {
+                model: root.presetCategories
+                Controls.MenuItem {
+                    required property string modelData
+                    text: modelData
+                    onTriggered: {
+                        delegate.listView.model.setProperty(delegate.index, "category", modelData)
+                        delegate.taskChanged()
+                    }
+                }
+            }
+
+            Controls.MenuSeparator {}
+
+            Controls.MenuItem {
+                text: i18n("Custom...")
+                onTriggered: {
+                    categoryField.text = delegate.category
+                    categoryDialog.open()
                 }
             }
         }
@@ -432,6 +485,27 @@ PlasmaComponents.ItemDelegate {
             id: renameField
             implicitWidth: Kirigami.Units.gridUnit * 14
             onAccepted: renameDialog.accept()
+        }
+    }
+
+    Controls.Dialog {
+        id: categoryDialog
+        title: i18n("Set category")
+        modal: true
+        standardButtons: Controls.Dialog.Ok | Controls.Dialog.Cancel
+        anchors.centerIn: Controls.Overlay.overlay
+
+        onAccepted: {
+            var text = categoryField.text.trim()
+            delegate.listView.model.setProperty(delegate.index, "category", text)
+            delegate.taskChanged()
+        }
+
+        PlasmaComponents.TextField {
+            id: categoryField
+            implicitWidth: Kirigami.Units.gridUnit * 14
+            placeholderText: i18n("Category name...")
+            onAccepted: categoryDialog.accept()
         }
     }
 }
