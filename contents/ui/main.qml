@@ -90,6 +90,7 @@ PlasmoidItem {
         if (taskIndex < 0 || taskIndex >= taskModel.count)
             return
         dismissUndo()
+        categoryFilter = ""
         navigationStack.push({ title: currentTitle })
         navigationStackChanged()
         var task = taskModel.get(taskIndex)
@@ -528,7 +529,11 @@ PlasmoidItem {
                     icon.name: "edit-clear-history-symbolic"
                     flat: true
                     visible: !root.isSublistView()
-                    onClicked: taskModel.deleteCompleted()
+                    onClicked: {
+                        taskModel.deleteCompleted()
+                        root._updateTrigger++
+                        root.updateDistinctCategories()
+                    }
                 }
             }
         }
