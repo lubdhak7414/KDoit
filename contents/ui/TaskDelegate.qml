@@ -27,6 +27,9 @@ PlasmaComponents.ItemDelegate {
     property int startIndex: index
     property int targetIndex: index
     property real startMouseY: 0
+    property bool _pressPending: false
+    property real _pressX: 0
+    property real _pressY: 0
 
     property bool shouldMakeSpace: {
         if (!listView || !listView.currentDragActive || isDragging)
@@ -156,13 +159,71 @@ PlasmaComponents.ItemDelegate {
     }
 
     MouseArea {
+        id: rowMouseArea
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.RightButton
-        onClicked: function (mouse) {
+        preventStealing: true
+        enabled: !delegate.isSublistItem || true
+
+        onPressed: function (mouse) {
+            if (mouse.button === Qt.RightButton)
+                return
+            delegate._pressX = mouse.x
+            delegate._pressY = mouse.y
+            delegate._pressPending = true
+        }
+
+        onPositionChanged: function (mouse) {
+            if (delegate.isDragging) {
+                var currentY = mapToItem(delegate.listView, 0, mouse.y).y
+                delegate.dragOffsetY = currentY - delegate.startMouseY
+                var raw = Math.round((delegate.index * delegate.gridSize + delegate.dragOffsetY) / delegate.gridSize)
+                var clamped = Math.max(0, Math.min(raw, delegate.listView.count - 1))
+                delegate.targetIndex = clamped
+                delegate.dropTargetChanged(clamped)
+                return
+            }
+            if (!delegate._pressPending)
+                return
+            var dx = mouse.x - delegate._pressX
+            var dy = mouse.y - delegate._pressY
+            if (Math.abs(dx) > Kirigami.Units.gridUnit || Math.abs(dy) > Kirigami.Units.gridUnit) {
+                delegate._pressPending = false
+                if (!delegate.dragEnabled)
+                    return
+                delegate.startIndex = delegate.index
+                delegate.targetIndex = delegate.index
+                delegate.startMouseY = mapToItem(delegate.listView, 0, delegate._pressY).y
+                delegate.isDragging = true
+                delegate.dragStarted(delegate.index)
+            }
+        }
+
+        onReleased: function (mouse) {
             if (mouse.button === Qt.RightButton) {
                 delegate.openMenu()
-            } else {
+                return
+            }
+            if (delegate.isDragging) {
+                var from = delegate.startIndex
+                var to = delegate.targetIndex
+                delegate.dropping()
+                delegate.isDragging = false
+                delegate.dragOffsetY = 0
+                if (from !== to && typeof delegate.listView.model.moveTask === "function")
+                    delegate.listView.model.moveTask(from, to)
+            } else if (delegate._pressPending) {
                 delegate.selected = !delegate.selected
+            }
+            delegate._pressPending = false
+        }
+
+        onCanceled: {
+            delegate._pressPending = false
+            if (delegate.isDragging) {
+                delegate.dropping()
+                delegate.isDragging = false
+                delegate.dragOffsetY = 0
             }
         }
     }
@@ -187,57 +248,9 @@ PlasmaComponents.ItemDelegate {
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: Kirigami.Units.smallSpacing + (!delegate.isSublistItem ? 6 : 0)
+        anchors.leftMargin: Kirigami.Units.smallSpacing
         anchors.rightMargin: Kirigami.Units.smallSpacing
         spacing: Kirigami.Units.largeSpacing
-
-        PlasmaComponents.Label {
-            id: dragHandle
-            text: "⋮⋮"
-            visible: delegate.dragEnabled
-            opacity: delegate.hovered || delegate.isDragging ? 0.7 : 0
-            Layout.preferredWidth: delegate.dragEnabled ? Kirigami.Units.iconSizes.small : 0
-            horizontalAlignment: Text.AlignHCenter
-            Behavior on opacity { NumberAnimation { duration: 120 } }
-
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.SizeVerCursor
-                preventStealing: true
-                enabled: delegate.dragEnabled
-
-                onPressed: function (mouse) {
-                    delegate.startIndex = delegate.index
-                    delegate.targetIndex = delegate.index
-                    delegate.startMouseY = mapToItem(delegate.listView, 0, mouse.y).y
-                    delegate.isDragging = true
-                    delegate.dragStarted(delegate.index)
-                }
-
-                onPositionChanged: function (mouse) {
-                    if (!delegate.isDragging)
-                        return
-                    var currentY = mapToItem(delegate.listView, 0, mouse.y).y
-                    delegate.dragOffsetY = currentY - delegate.startMouseY
-                    var raw = Math.round((delegate.index * delegate.gridSize + delegate.dragOffsetY) / delegate.gridSize)
-                    var clamped = Math.max(0, Math.min(raw, delegate.listView.count - 1))
-                    delegate.targetIndex = clamped
-                    delegate.dropTargetChanged(clamped)
-                }
-
-                onReleased: {
-                    if (!delegate.isDragging)
-                        return
-                    var from = delegate.startIndex
-                    var to = delegate.targetIndex
-                    delegate.dropping()
-                    delegate.isDragging = false
-                    delegate.dragOffsetY = 0
-                    if (from !== to && typeof delegate.listView.model.moveTask === "function")
-                        delegate.listView.model.moveTask(from, to)
-                }
-            }
-        }
 
         PlasmaComponents.CheckBox {
             id: taskCheckBox
