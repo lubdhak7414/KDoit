@@ -22,6 +22,7 @@ PlasmaComponents.ItemDelegate {
     property bool isSublistItem: false
 
     property bool isDragging: false
+    property bool selected: false
     property real dragOffsetY: 0
     property int startIndex: index
     property int targetIndex: index
@@ -156,8 +157,22 @@ PlasmaComponents.ItemDelegate {
 
     MouseArea {
         anchors.fill: parent
-        acceptedButtons: Qt.RightButton
-        onClicked: delegate.openMenu()
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        onClicked: function (mouse) {
+            if (mouse.button === Qt.RightButton) {
+                delegate.openMenu()
+            } else {
+                delegate.selected = !delegate.selected
+            }
+        }
+    }
+
+    Rectangle {
+        visible: delegate.selected
+        anchors.fill: parent
+        color: Kirigami.Theme.highlightColor
+        opacity: 0.15
+        z: -1
     }
 
     Rectangle {
@@ -245,14 +260,6 @@ PlasmaComponents.ItemDelegate {
         }
 
         PlasmaComponents.Label {
-            visible: delegate.category !== "" && !delegate.isSublistItem
-            text: "#" + delegate.category
-            font.pointSize: Kirigami.Theme.smallFont.pointSize
-            color: Kirigami.Theme.disabledTextColor
-            Layout.alignment: Qt.AlignVCenter
-        }
-
-        PlasmaComponents.Label {
             visible: delegate.sublist.length > 0
             text: delegate.sublistDone() + "/" + delegate.sublist.length
             color: Kirigami.Theme.highlightColor
@@ -265,14 +272,22 @@ PlasmaComponents.ItemDelegate {
             }
         }
 
-        Item {
+        Column {
             visible: !delegate.isSublistItem
             Layout.preferredWidth: Kirigami.Units.gridUnit * 5
             Layout.alignment: Qt.AlignVCenter
+            spacing: 0
 
             PlasmaComponents.Label {
                 anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
+                visible: delegate.category !== ""
+                text: "#" + delegate.category
+                font.pointSize: Kirigami.Theme.smallFont.pointSize
+                color: Kirigami.Theme.disabledTextColor
+            }
+
+            PlasmaComponents.Label {
+                anchors.right: parent.right
                 visible: delegate.dueDate !== ""
                 text: delegate.formatDate(delegate.dueDate)
                 font.pointSize: Kirigami.Theme.smallFont.pointSize
