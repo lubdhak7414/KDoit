@@ -161,17 +161,18 @@ PlasmaComponents.ItemDelegate {
     }
 
     Rectangle {
-        visible: !delegate.isSublistItem && delegate.priority > 0
+        visible: !delegate.isSublistItem
         width: 3
         height: parent.height
         anchors.left: parent.left
         color: delegate.priority === 2 ? Kirigami.Theme.negativeTextColor
-             : Kirigami.Theme.neutralTextColor
+             : delegate.priority === 1 ? Kirigami.Theme.neutralTextColor
+             : Qt.alpha(Kirigami.Theme.textColor, 0.1)
     }
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: Kirigami.Units.smallSpacing + (!delegate.isSublistItem && delegate.priority > 0 ? 6 : 0)
+        anchors.leftMargin: Kirigami.Units.smallSpacing + (!delegate.isSublistItem ? 6 : 0)
         anchors.rightMargin: Kirigami.Units.smallSpacing
         spacing: Kirigami.Units.largeSpacing
 
@@ -234,26 +235,6 @@ PlasmaComponents.ItemDelegate {
             }
         }
 
-        Rectangle {
-            visible: delegate.category !== "" && !delegate.isSublistItem
-            implicitWidth: catLabel.implicitWidth + Kirigami.Units.largeSpacing
-            implicitHeight: catLabel.implicitHeight + Kirigami.Units.smallSpacing
-            Layout.maximumWidth: implicitWidth
-            radius: height / 2
-            color: Qt.alpha(root.categoryColor(delegate.category), 0.15)
-            border.color: Qt.alpha(root.categoryColor(delegate.category), 0.4)
-            border.width: 1
-            Layout.alignment: Qt.AlignVCenter
-
-            PlasmaComponents.Label {
-                id: catLabel
-                anchors.centerIn: parent
-                text: delegate.category
-                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                color: root.categoryColor(delegate.category)
-            }
-        }
-
         PlasmaComponents.Label {
             text: delegate.title
             elide: Text.ElideRight
@@ -261,6 +242,14 @@ PlasmaComponents.ItemDelegate {
             Layout.fillWidth: true
             opacity: delegate.done ? 0.6 : 1
             font.strikeout: delegate.done
+        }
+
+        PlasmaComponents.Label {
+            visible: delegate.category !== "" && !delegate.isSublistItem
+            text: "#" + delegate.category
+            font.pointSize: Kirigami.Theme.smallFont.pointSize
+            color: Kirigami.Theme.disabledTextColor
+            Layout.alignment: Qt.AlignVCenter
         }
 
         PlasmaComponents.Label {

@@ -319,6 +319,24 @@ PlasmoidItem {
                     Layout.fillWidth: true
                 }
 
+                PlasmaComponents.ComboBox {
+                    id: categoryCombo
+                    visible: root.distinctCategories.length > 0 && !root.isSublistView()
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 6
+                    model: [i18n("All")].concat(root.distinctCategories.map(function(c) { return c }))
+                    currentIndex: {
+                        if (root.categoryFilter === "") return 0
+                        var idx = root.distinctCategories.indexOf(root.categoryFilter)
+                        return idx >= 0 ? idx + 1 : 0
+                    }
+                    onActivated: function(index) {
+                        if (index === 0)
+                            root.categoryFilter = ""
+                        else
+                            root.categoryFilter = root.distinctCategories[index - 1]
+                    }
+                }
+
                 PlasmaComponents.Button {
                     icon.name: "view-sort-symbolic"
                     flat: true
@@ -367,85 +385,15 @@ PlasmoidItem {
                 }
             }
 
-            Flow {
+            PlasmaComponents.TextField {
+                id: searchField
                 Layout.fillWidth: true
-                Layout.maximumHeight: Kirigami.Units.gridUnit * 2.7
-                spacing: Kirigami.Units.smallSpacing / 2
-                visible: root.distinctCategories.length > 0 && !root.isSublistView()
-                clip: true
-
-                Rectangle {
-                    width: allLabel.implicitWidth + Kirigami.Units.largeSpacing
-                    height: Kirigami.Units.gridUnit * 0.9
-                    radius: height / 2
-                    color: root.categoryFilter === "" ? Kirigami.Theme.highlightColor : Kirigami.Theme.alternateBackgroundColor
-                    border.color: root.categoryFilter === "" ? Kirigami.Theme.highlightColor : Kirigami.Theme.disabledTextColor
-                    border.width: 1
-
-                    PlasmaComponents.Label {
-                        id: allLabel
-                        anchors.centerIn: parent
-                        text: i18n("All")
-                        font.pointSize: Kirigami.Theme.smallFont.pointSize
-                        color: root.categoryFilter === "" ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.categoryFilter = ""
-                    }
-                }
-
-                Repeater {
-                    model: root.distinctCategories
-                    delegate: Rectangle {
-                        required property string modelData
-                        width: chipLabel.implicitWidth + Kirigami.Units.largeSpacing
-                        height: Kirigami.Units.gridUnit * 0.9
-                        radius: height / 2
-                        color: root.categoryFilter === modelData ? root.categoryColor(modelData) : Kirigami.Theme.alternateBackgroundColor
-                        border.color: root.categoryFilter === modelData ? root.categoryColor(modelData) : Kirigami.Theme.disabledTextColor
-                        border.width: 1
-
-                        PlasmaComponents.Label {
-                            id: chipLabel
-                            anchors.centerIn: parent
-                            text: modelData
-                            font.pointSize: Kirigami.Theme.smallFont.pointSize
-                            color: root.categoryFilter === modelData ? root.categoryTextColor(modelData) : Kirigami.Theme.textColor
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.categoryFilter = (root.categoryFilter === modelData ? "" : modelData)
-                        }
-                    }
-                }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Kirigami.Units.smallSpacing
-
-                PlasmaComponents.TextField {
-                    id: searchField
-                    Layout.fillWidth: true
-                    visible: root.searchActive
-                    placeholderText: i18n("Search tasks...")
-                    onTextChanged: root.searchText = text
-                    Keys.onEscapePressed: {
-                        text = ""
-                        root.searchActive = false
-                    }
-                }
-
-                AddTaskBar {
-                    Layout.fillWidth: !searchField.visible
-                    onAddRequested: function (title) {
-                        root.addToCurrent(title)
-                    }
+                visible: root.searchActive
+                placeholderText: i18n("Search tasks...")
+                onTextChanged: root.searchText = text
+                Keys.onEscapePressed: {
+                    text = ""
+                    root.searchActive = false
                 }
             }
 
@@ -546,6 +494,13 @@ PlasmoidItem {
                         onTriggered: root.undoDelete()
                     }
                 ]
+            }
+
+            AddTaskBar {
+                Layout.fillWidth: true
+                onAddRequested: function (title) {
+                    root.addToCurrent(title)
+                }
             }
 
             RowLayout {
