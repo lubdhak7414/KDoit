@@ -282,7 +282,6 @@ PlasmaComponents.ItemDelegate {
 
     Controls.Menu {
         id: contextMenu
-        popupType: Controls.Popup.Window
 
         Controls.Menu {
             title: i18n("Due date")
@@ -395,7 +394,6 @@ PlasmaComponents.ItemDelegate {
 
     Controls.Menu {
         id: sublistMenu
-        popupType: Controls.Popup.Window
 
         Controls.MenuItem {
             text: i18n("Rename...")

@@ -305,7 +305,6 @@ PlasmoidItem {
 
                     Controls.Menu {
                         id: sortMenu
-                        popupType: Controls.Popup.Window
 
                         Controls.MenuItem {
                             text: i18n("Priority")
@@ -364,7 +363,7 @@ PlasmoidItem {
                     width: allLabel.implicitWidth + Kirigami.Units.largeSpacing
                     height: Kirigami.Units.gridUnit * 0.9
                     radius: height / 2
-                    color: root.categoryFilter === "" ? Kirigami.Theme.highlightColor : Kirigami.Theme.viewBackgroundColor
+                    color: root.categoryFilter === "" ? Kirigami.Theme.highlightColor : Kirigami.Theme.alternateBackgroundColor
                     border.color: root.categoryFilter === "" ? Kirigami.Theme.highlightColor : Kirigami.Theme.disabledTextColor
                     border.width: 1
 
@@ -390,7 +389,7 @@ PlasmoidItem {
                         width: chipLabel.implicitWidth + Kirigami.Units.largeSpacing
                         height: Kirigami.Units.gridUnit * 0.9
                         radius: height / 2
-                        color: root.categoryFilter === modelData ? root.categoryColor(modelData) : Kirigami.Theme.viewBackgroundColor
+                        color: root.categoryFilter === modelData ? root.categoryColor(modelData) : Kirigami.Theme.alternateBackgroundColor
                         border.color: root.categoryFilter === modelData ? root.categoryColor(modelData) : Kirigami.Theme.disabledTextColor
                         border.width: 1
 
