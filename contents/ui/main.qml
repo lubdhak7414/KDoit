@@ -30,6 +30,69 @@ PlasmoidItem {
     ]
     property bool isFiltering: searchText.length > 0 || plasmoid.configuration.hideCompleted || categoryFilter !== ""
 
+    property var selectedIndices: ({})
+    property int _lastClickedIndex: -1
+
+    function toggleSelect(index) {
+        var copy = Object.assign({}, selectedIndices)
+        if (copy[index])
+            delete copy[index]
+        else
+            copy[index] = true
+        selectedIndices = copy
+        _lastClickedIndex = index
+    }
+
+    function rangeSelect(index) {
+        if (_lastClickedIndex < 0) {
+            toggleSelect(index)
+            return
+        }
+        var lo = Math.min(_lastClickedIndex, index)
+        var hi = Math.max(_lastClickedIndex, index)
+        var copy = Object.assign({}, selectedIndices)
+        for (var i = lo; i <= hi; i++)
+            copy[i] = true
+        selectedIndices = copy
+        _lastClickedIndex = index
+    }
+
+    function selectOnly(index) {
+        var copy = {}
+        copy[index] = true
+        selectedIndices = copy
+        _lastClickedIndex = index
+    }
+
+    function clearSelection() {
+        selectedIndices = {}
+        _lastClickedIndex = -1
+    }
+
+    function selectedCount() {
+        return Object.keys(selectedIndices).length
+    }
+
+    function deleteSelected() {
+        var indices = Object.keys(selectedIndices).map(Number)
+        if (indices.length === 0)
+            return
+        var removed = []
+        for (var i = 0; i < indices.length; i++) {
+            var idx = indices[i]
+            if (idx >= 0 && idx < currentModel.count) {
+                var t = currentModel.get(idx)
+                removed.push({ index: idx, task: JSON.parse(JSON.stringify(t)) })
+            }
+        }
+        currentModel.removeTasks(indices)
+        clearSelection()
+        _updateTrigger++
+        updateDistinctCategories()
+        lastDeleted = { type: "multi", items: removed }
+        dismissUndo()
+    }
+
     property int visibleCount: {
         var _t = _updateTrigger
         var _h = plasmoid.configuration.hideCompleted
@@ -162,7 +225,12 @@ PlasmoidItem {
     function undoDelete() {
         if (lastDeleted === null)
             return
-        if (isSublistView()) {
+        if (lastDeleted.type === "multi") {
+            var items = lastDeleted.items
+            for (var i = 0; i < items.length; i++) {
+                taskModel.insertTask(items[i].index, items[i].task)
+            }
+        } else if (isSublistView()) {
             sublistModel.insert(Math.min(lastDeleted.index, sublistModel.count),
                 makeSublistRow(lastDeleted.task.title, lastDeleted.task.done))
             syncSublist()
@@ -509,16 +577,26 @@ PlasmoidItem {
                 spacing: Kirigami.Units.smallSpacing
 
                 PlasmaComponents.Label {
-                    text: i18np("%1 task", "%1 tasks", root.visibleCount)
+                    text: root.selectedCount() > 0
+                        ? i18np("%1 selected", "%1 selected", root.selectedCount())
+                        : i18np("%1 task", "%1 tasks", root.visibleCount)
                     opacity: 0.7
                     Layout.fillWidth: true
+                }
+
+                PlasmaComponents.Button {
+                    text: i18n("Delete selected")
+                    icon.name: "edit-delete-symbolic"
+                    flat: true
+                    visible: root.selectedCount() > 0
+                    onClicked: root.deleteSelected()
                 }
 
                 PlasmaComponents.Button {
                     text: i18n("Delete completed")
                     icon.name: "edit-clear-history-symbolic"
                     flat: true
-                    visible: !root.isSublistView()
+                    visible: !root.isSublistView() && root.selectedCount() === 0
                     onClicked: {
                         taskModel.deleteCompleted()
                         root._updateTrigger++

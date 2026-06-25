@@ -213,7 +213,13 @@ PlasmaComponents.ItemDelegate {
                 if (from !== to && typeof delegate.listView.model.moveTask === "function")
                     delegate.listView.model.moveTask(from, to)
             } else if (delegate._pressPending) {
-                delegate.selected = !delegate.selected
+                if (mouse.modifiers & Qt.ControlModifier) {
+                    root.toggleSelect(delegate.index)
+                } else if (mouse.modifiers & Qt.ShiftModifier) {
+                    root.rangeSelect(delegate.index)
+                } else {
+                    root.selectOnly(delegate.index)
+                }
             }
             delegate._pressPending = false
         }
@@ -229,7 +235,7 @@ PlasmaComponents.ItemDelegate {
     }
 
     Rectangle {
-        visible: delegate.selected
+        visible: root.selectedIndices[delegate.index] === true
         anchors.fill: parent
         color: Kirigami.Theme.highlightColor
         opacity: 0.15

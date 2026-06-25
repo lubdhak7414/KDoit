@@ -81,6 +81,15 @@ ListModel {
         save()
     }
 
+    function removeTasks(indices) {
+        var sorted = indices.slice().sort(function (a, b) { return b - a })
+        for (var i = 0; i < sorted.length; i++) {
+            if (sorted[i] >= 0 && sorted[i] < count)
+                remove(sorted[i], 1)
+        }
+        save()
+    }
+
     function moveTask(from, to) {
         if (from === to)
             return
