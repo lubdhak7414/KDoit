@@ -58,6 +58,11 @@ PlasmoidItem {
     }
 
     function selectOnly(index) {
+        var keys = Object.keys(selectedIndices)
+        if (keys.length === 1 && parseInt(keys[0]) === index) {
+            clearSelection()
+            return
+        }
         var copy = {}
         copy[index] = true
         selectedIndices = copy
@@ -602,8 +607,14 @@ PlasmoidItem {
                         root._updateTrigger++
                         root.updateDistinctCategories()
                     }
+                    }
+
+                    footer: MouseArea {
+                        width: parent.width
+                        height: Kirigami.Units.gridUnit * 2
+                        onClicked: root.clearSelection()
+                    }
                 }
             }
-        }
     }
 }
