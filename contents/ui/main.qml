@@ -82,7 +82,8 @@ PlasmoidItem {
 
     function dismissUndo() {
         lastDeleted = null
-        undoMessage.visible = false
+        if (typeof undoMessage !== "undefined")
+            undoMessage.visible = false
         undoTimer.stop()
     }
 
@@ -201,6 +202,11 @@ PlasmoidItem {
                 return a.title.localeCompare(b.title)
             if (mode === "done")
                 return (a.done === b.done) ? 0 : (a.done ? 1 : -1)
+            if (mode === "createdAt") {
+                var ac = a.createdAt === "" ? "00000000" : a.createdAt
+                var bc = b.createdAt === "" ? "00000000" : b.createdAt
+                return ac < bc ? -1 : (ac > bc ? 1 : a.title.localeCompare(b.title))
+            }
             return 0
         })
         currentModel.clear()
@@ -321,6 +327,10 @@ PlasmoidItem {
                         Controls.MenuItem {
                             text: i18n("Completed last")
                             onTriggered: root.sortTasks("done")
+                        }
+                        Controls.MenuItem {
+                            text: i18n("Created")
+                            onTriggered: root.sortTasks("createdAt")
                         }
                     }
                 }
