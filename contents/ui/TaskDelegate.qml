@@ -78,6 +78,19 @@ PlasmaComponents.ItemDelegate {
         return d < t
     }
 
+    function isToday() {
+        if (dueDate === "")
+            return false
+        var today = new Date()
+        var parts = dueDate.split("-")
+        if (parts.length !== 3)
+            return false
+        var year = parseInt(parts[0])
+        var month = parseInt(parts[1])
+        var day = parseInt(parts[2])
+        return year === today.getFullYear() && month === today.getMonth() + 1 && day === today.getDate()
+    }
+
     function sublistDone() {
         var n = 0
         for (var i = 0; i < sublist.length; i++) {
@@ -201,8 +214,33 @@ PlasmaComponents.ItemDelegate {
             }
         }
 
+        Rectangle {
+            visible: !delegate.isSublistItem && delegate.priority > 0
+            implicitWidth: taskCheckBox.implicitWidth + Kirigami.Units.smallSpacing * 2
+            implicitHeight: taskCheckBox.implicitHeight + Kirigami.Units.smallSpacing * 2
+            radius: height / 2
+            color: "transparent"
+            border.color: delegate.priority === 2 ? Kirigami.Theme.negativeTextColor
+                         : Kirigami.Theme.neutralTextColor
+            border.width: 1.5
+            Layout.alignment: Qt.AlignVCenter
+
+            PlasmaComponents.CheckBox {
+                id: taskCheckBox
+                anchors.centerIn: parent
+                Binding on checked {
+                    value: delegate.done
+                }
+                onToggled: {
+                    delegate.listView.model.setProperty(delegate.index, "done", checked)
+                    delegate.taskChanged()
+                }
+            }
+        }
+
         PlasmaComponents.CheckBox {
-            id: taskCheckBox
+            id: taskCheckBoxNoPriority
+            visible: delegate.isSublistItem || delegate.priority === 0
             Binding on checked {
                 value: delegate.done
             }
@@ -210,9 +248,6 @@ PlasmaComponents.ItemDelegate {
                 delegate.listView.model.setProperty(delegate.index, "done", checked)
                 delegate.taskChanged()
             }
-            // Priority indicated by checkbox accent color, not a separate dot
-            Kirigami.Theme.inherit: false
-            Kirigami.Theme.colorSet: Kirigami.Theme.View
         }
 
         Rectangle {
@@ -261,8 +296,10 @@ PlasmaComponents.ItemDelegate {
             visible: delegate.dueDate !== "" && !delegate.isSublistItem
             text: delegate.formatDate(delegate.dueDate)
             font.pointSize: Kirigami.Theme.smallFont.pointSize
-            font.bold: delegate.isOverdue()
-            color: delegate.isOverdue() ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.disabledTextColor
+            font.bold: delegate.isOverdue() || delegate.isToday()
+            color: delegate.isOverdue() ? Kirigami.Theme.negativeTextColor
+                 : delegate.isToday() ? Kirigami.Theme.neutralTextColor
+                 : Kirigami.Theme.disabledTextColor
             Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
         }
 

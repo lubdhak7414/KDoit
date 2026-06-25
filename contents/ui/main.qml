@@ -220,20 +220,37 @@ PlasmoidItem {
         updateDistinctCategories()
     }
 
-    function categoryColor(cat) {
-        if (cat === "")
-            return "transparent"
+    property var _categoryHues: [
+        { h: 0,   s: 0.75 },
+        { h: 25,  s: 0.80 },
+        { h: 45,  s: 0.70 },
+        { h: 130, s: 0.55 },
+        { h: 200, s: 0.65 },
+        { h: 230, s: 0.70 },
+        { h: 270, s: 0.60 },
+        { h: 330, s: 0.65 }
+    ]
+
+    function _hashCategory(cat) {
         var hash = 5381
         for (var i = 0; i < cat.length; i++)
             hash = ((hash << 5) + hash + cat.charCodeAt(i)) & 0xFFFFFFFF
-        var hue = (hash >>> 0) % 360
-        return Qt.hsla(hue / 360, 0.7, 0.45, 1.0)
+        return (hash >>> 0) % _categoryHues.length
+    }
+
+    function categoryColor(cat) {
+        if (cat === "")
+            return "transparent"
+        var entry = _categoryHues[_hashCategory(cat)]
+        var bgLuma = Kirigami.ColorUtils.grayForColor(Kirigami.Theme.backgroundColor)
+        var lightness = bgLuma < 0.5 ? 0.60 : 0.40
+        return Qt.hsla(entry.h / 360, entry.s, lightness, 1.0)
     }
 
     function categoryTextColor(cat) {
         if (cat === "")
             return "transparent"
-        return "#ffffff"
+        return Kirigami.Theme.textColor
     }
 
     function updateDistinctCategories() {
