@@ -265,15 +265,22 @@ PlasmaComponents.ItemDelegate {
             }
         }
 
-        PlasmaComponents.Label {
-            visible: delegate.dueDate !== "" && !delegate.isSublistItem
-            text: delegate.formatDate(delegate.dueDate)
-            font.pointSize: Kirigami.Theme.smallFont.pointSize
-            font.bold: delegate.isOverdue() || delegate.isToday()
-            color: delegate.isOverdue() ? Kirigami.Theme.negativeTextColor
-                 : delegate.isToday() ? Kirigami.Theme.neutralTextColor
-                 : Kirigami.Theme.disabledTextColor
-            Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+        Item {
+            visible: !delegate.isSublistItem
+            Layout.preferredWidth: Kirigami.Units.gridUnit * 5
+            Layout.alignment: Qt.AlignVCenter
+
+            PlasmaComponents.Label {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                visible: delegate.dueDate !== ""
+                text: delegate.formatDate(delegate.dueDate)
+                font.pointSize: Kirigami.Theme.smallFont.pointSize
+                font.bold: delegate.isOverdue() || delegate.isToday()
+                color: delegate.isOverdue() ? Kirigami.Theme.negativeTextColor
+                     : delegate.isToday() ? Kirigami.Theme.neutralTextColor
+                     : Kirigami.Theme.disabledTextColor
+            }
         }
 
         PlasmaComponents.Button {

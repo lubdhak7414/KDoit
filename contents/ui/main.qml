@@ -498,6 +498,7 @@ PlasmoidItem {
 
             AddTaskBar {
                 Layout.fillWidth: true
+                Layout.topMargin: Kirigami.Units.largeSpacing
                 onAddRequested: function (title) {
                     root.addToCurrent(title)
                 }
