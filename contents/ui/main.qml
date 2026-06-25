@@ -45,6 +45,18 @@ PlasmoidItem {
         id: sublistModel
     }
 
+    function makeSublistRow(title, done) {
+        return {
+            title: title,
+            done: done,
+            priority: 0,
+            category: "",
+            createdAt: "",
+            dueDate: "",
+            sublist: []
+        }
+    }
+
     function syncSublist() {
         if (activeSublistTask === null)
             return
@@ -73,7 +85,7 @@ PlasmoidItem {
         sublistModel.clear()
         var sub = task.sublist
         for (var i = 0; i < sub.length; i++)
-            sublistModel.append({ title: sub[i].title, done: sub[i].done === true })
+            sublistModel.append(makeSublistRow(sub[i].title, sub[i].done === true))
         currentTitle = task.title
         currentModel = sublistModel
     }
@@ -95,7 +107,7 @@ PlasmoidItem {
 
     function addToCurrent(title) {
         if (isSublistView()) {
-            sublistModel.append({ title: title, done: false })
+            sublistModel.append(makeSublistRow(title, false))
             syncSublist()
         } else {
             taskModel.addTask(title, plasmoid.configuration.defaultPriority)
@@ -135,10 +147,8 @@ PlasmoidItem {
         if (lastDeleted === null)
             return
         if (isSublistView()) {
-            sublistModel.insert(Math.min(lastDeleted.index, sublistModel.count), {
-                title: lastDeleted.task.title,
-                done: lastDeleted.task.done
-            })
+            sublistModel.insert(Math.min(lastDeleted.index, sublistModel.count),
+                makeSublistRow(lastDeleted.task.title, lastDeleted.task.done))
             syncSublist()
         } else {
             taskModel.insertTask(lastDeleted.index, lastDeleted.task)

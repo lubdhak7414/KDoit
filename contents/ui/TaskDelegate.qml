@@ -10,10 +10,10 @@ PlasmaComponents.ItemDelegate {
     required property int index
     required property string title
     required property bool done
-    property int priority: model.priority !== undefined ? model.priority : 0
-    property string category: model.category !== undefined ? model.category : ""
-    property string dueDate: model.dueDate !== undefined ? model.dueDate : ""
-    property var sublist: model.sublist !== undefined ? model.sublist : []
+    required property int priority
+    required property string category
+    required property string dueDate
+    required property var sublist
 
     property ListView listView: ListView.view
     property real gridSize: 52
@@ -219,7 +219,7 @@ PlasmaComponents.ItemDelegate {
         }
 
         PlasmaComponents.Label {
-            visible: delegate.dueDate !== ""
+            visible: delegate.dueDate !== "" && !delegate.isSublistItem
             text: delegate.formatDate(delegate.dueDate)
             font.pointSize: Kirigami.Theme.smallFont.pointSize
             font.bold: delegate.isOverdue()
@@ -243,7 +243,7 @@ PlasmaComponents.ItemDelegate {
 
         Controls.Menu {
             title: i18n("Due date")
-            visible: !delegate.isSublistItem
+            enabled: !delegate.isSublistItem
 
             Controls.MenuItem {
                 text: i18n("Today")
@@ -277,7 +277,7 @@ PlasmaComponents.ItemDelegate {
 
         Controls.Menu {
             title: i18n("Priority")
-            visible: !delegate.isSublistItem
+            enabled: !delegate.isSublistItem
 
             Controls.MenuItem {
                 text: i18n("High")
