@@ -274,6 +274,7 @@ PlasmaComponents.ItemDelegate {
             elide: Text.ElideRight
             maximumLineCount: 1
             Layout.fillWidth: true
+            Layout.maximumWidth: delegate.width - Kirigami.Units.gridUnit * 9
             opacity: delegate.done ? 0.6 : 1
             font.strikeout: delegate.done
         }
@@ -313,7 +314,7 @@ PlasmaComponents.ItemDelegate {
                 font.bold: delegate.isOverdue() || delegate.isToday()
                 color: delegate.isOverdue() ? Kirigami.Theme.negativeTextColor
                      : delegate.isToday() ? Kirigami.Theme.neutralTextColor
-                     : Kirigami.Theme.disabledTextColor
+                     : Kirigami.Theme.textColor
             }
         }
 

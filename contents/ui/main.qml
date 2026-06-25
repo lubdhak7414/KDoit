@@ -472,6 +472,12 @@ PlasmoidItem {
                 clip: true
                 contentWidth: availableWidth
 
+                MouseArea {
+                    anchors.fill: parent
+                    z: -1
+                    onClicked: root.clearSelection()
+                }
+
                 ListView {
                     id: taskList
                     model: root.currentModel
