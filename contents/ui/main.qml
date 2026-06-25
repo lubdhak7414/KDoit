@@ -608,12 +608,6 @@ PlasmoidItem {
                         root.updateDistinctCategories()
                     }
                     }
-
-                    footer: MouseArea {
-                        width: parent.width
-                        height: Kirigami.Units.gridUnit * 2
-                        onClicked: root.clearSelection()
-                    }
                 }
             }
     }
