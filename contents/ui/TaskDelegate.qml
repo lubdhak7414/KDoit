@@ -151,7 +151,7 @@ PlasmaComponents.ItemDelegate {
         anchors.fill: parent
         anchors.leftMargin: Kirigami.Units.smallSpacing
         anchors.rightMargin: Kirigami.Units.smallSpacing
-        spacing: Kirigami.Units.smallSpacing
+        spacing: Kirigami.Units.largeSpacing
 
         PlasmaComponents.Label {
             id: dragHandle
@@ -202,6 +202,7 @@ PlasmaComponents.ItemDelegate {
         }
 
         PlasmaComponents.CheckBox {
+            id: taskCheckBox
             Binding on checked {
                 value: delegate.done
             }
@@ -209,17 +210,9 @@ PlasmaComponents.ItemDelegate {
                 delegate.listView.model.setProperty(delegate.index, "done", checked)
                 delegate.taskChanged()
             }
-        }
-
-        Rectangle {
-            visible: !delegate.isSublistItem
-            implicitWidth: 8
-            implicitHeight: 8
-            radius: 4
-            Layout.alignment: Qt.AlignVCenter
-            color: delegate.priority === 2 ? Kirigami.Theme.negativeTextColor
-                 : delegate.priority === 1 ? Kirigami.Theme.neutralTextColor
-                 : Kirigami.Theme.positiveTextColor
+            // Priority indicated by checkbox accent color, not a separate dot
+            Kirigami.Theme.inherit: false
+            Kirigami.Theme.colorSet: Kirigami.Theme.View
         }
 
         Rectangle {
@@ -228,7 +221,9 @@ PlasmaComponents.ItemDelegate {
             implicitHeight: catLabel.implicitHeight + Kirigami.Units.smallSpacing
             Layout.maximumWidth: implicitWidth
             radius: height / 2
-            color: root.categoryColor(delegate.category)
+            color: Qt.alpha(root.categoryColor(delegate.category), 0.15)
+            border.color: Qt.alpha(root.categoryColor(delegate.category), 0.4)
+            border.width: 1
             Layout.alignment: Qt.AlignVCenter
 
             PlasmaComponents.Label {
@@ -236,13 +231,14 @@ PlasmaComponents.ItemDelegate {
                 anchors.centerIn: parent
                 text: delegate.category
                 font.pointSize: Kirigami.Theme.smallFont.pointSize
-                color: root.categoryTextColor(delegate.category)
+                color: root.categoryColor(delegate.category)
             }
         }
 
         PlasmaComponents.Label {
             text: delegate.title
             elide: Text.ElideRight
+            maximumLineCount: 1
             Layout.fillWidth: true
             opacity: delegate.done ? 0.6 : 1
             font.strikeout: delegate.done
@@ -267,6 +263,7 @@ PlasmaComponents.ItemDelegate {
             font.pointSize: Kirigami.Theme.smallFont.pointSize
             font.bold: delegate.isOverdue()
             color: delegate.isOverdue() ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.disabledTextColor
+            Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
         }
 
         PlasmaComponents.Button {
@@ -275,6 +272,7 @@ PlasmaComponents.ItemDelegate {
             display: PlasmaComponents.AbstractButton.IconOnly
             text: i18n("Edit task")
             opacity: delegate.hovered ? 1 : 0
+            Layout.preferredWidth: implicitWidth
             Behavior on opacity { NumberAnimation { duration: 120 } }
             onClicked: delegate.openMenu()
         }
@@ -385,6 +383,8 @@ PlasmaComponents.ItemDelegate {
                 renameDialog.open()
             }
         }
+
+        Controls.MenuSeparator {}
 
         Controls.MenuItem {
             text: i18n("Delete")

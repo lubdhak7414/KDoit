@@ -350,18 +350,6 @@ PlasmoidItem {
                 }
             }
 
-            PlasmaComponents.TextField {
-                id: searchField
-                Layout.fillWidth: true
-                visible: root.searchActive
-                placeholderText: i18n("Search tasks...")
-                onTextChanged: root.searchText = text
-                Keys.onEscapePressed: {
-                    text = ""
-                    root.searchActive = false
-                }
-            }
-
             Flow {
                 Layout.fillWidth: true
                 Layout.maximumHeight: Kirigami.Units.gridUnit * 2.7
@@ -420,10 +408,27 @@ PlasmoidItem {
                 }
             }
 
-            AddTaskBar {
+            RowLayout {
                 Layout.fillWidth: true
-                onAddRequested: function (title) {
-                    root.addToCurrent(title)
+                spacing: Kirigami.Units.smallSpacing
+
+                PlasmaComponents.TextField {
+                    id: searchField
+                    Layout.fillWidth: true
+                    visible: root.searchActive
+                    placeholderText: i18n("Search tasks...")
+                    onTextChanged: root.searchText = text
+                    Keys.onEscapePressed: {
+                        text = ""
+                        root.searchActive = false
+                    }
+                }
+
+                AddTaskBar {
+                    Layout.fillWidth: !searchField.visible
+                    onAddRequested: function (title) {
+                        root.addToCurrent(title)
+                    }
                 }
             }
 
