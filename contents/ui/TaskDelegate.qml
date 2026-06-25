@@ -160,9 +160,18 @@ PlasmaComponents.ItemDelegate {
         onClicked: delegate.openMenu()
     }
 
+    Rectangle {
+        visible: !delegate.isSublistItem && delegate.priority > 0
+        width: 3
+        height: parent.height
+        anchors.left: parent.left
+        color: delegate.priority === 2 ? Kirigami.Theme.negativeTextColor
+             : Kirigami.Theme.neutralTextColor
+    }
+
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: Kirigami.Units.smallSpacing
+        anchors.leftMargin: Kirigami.Units.smallSpacing + (!delegate.isSublistItem && delegate.priority > 0 ? 6 : 0)
         anchors.rightMargin: Kirigami.Units.smallSpacing
         spacing: Kirigami.Units.largeSpacing
 
@@ -214,33 +223,8 @@ PlasmaComponents.ItemDelegate {
             }
         }
 
-        Rectangle {
-            visible: !delegate.isSublistItem && delegate.priority > 0
-            implicitWidth: taskCheckBox.implicitWidth + Kirigami.Units.smallSpacing * 2
-            implicitHeight: taskCheckBox.implicitHeight + Kirigami.Units.smallSpacing * 2
-            radius: height / 2
-            color: "transparent"
-            border.color: delegate.priority === 2 ? Kirigami.Theme.negativeTextColor
-                         : Kirigami.Theme.neutralTextColor
-            border.width: 1.5
-            Layout.alignment: Qt.AlignVCenter
-
-            PlasmaComponents.CheckBox {
-                id: taskCheckBox
-                anchors.centerIn: parent
-                Binding on checked {
-                    value: delegate.done
-                }
-                onToggled: {
-                    delegate.listView.model.setProperty(delegate.index, "done", checked)
-                    delegate.taskChanged()
-                }
-            }
-        }
-
         PlasmaComponents.CheckBox {
-            id: taskCheckBoxNoPriority
-            visible: delegate.isSublistItem || delegate.priority === 0
+            id: taskCheckBox
             Binding on checked {
                 value: delegate.done
             }
