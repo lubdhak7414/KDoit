@@ -226,6 +226,7 @@ PlasmaComponents.ItemDelegate {
             visible: delegate.category !== "" && !delegate.isSublistItem
             implicitWidth: catLabel.implicitWidth + Kirigami.Units.largeSpacing
             implicitHeight: catLabel.implicitHeight + Kirigami.Units.smallSpacing
+            Layout.maximumWidth: implicitWidth
             radius: height / 2
             color: root.categoryColor(delegate.category)
             Layout.alignment: Qt.AlignVCenter

@@ -90,9 +90,9 @@ PlasmoidItem {
         if (taskIndex < 0 || taskIndex >= taskModel.count)
             return
         dismissUndo()
-        categoryFilter = ""
-        navigationStack.push({ title: currentTitle })
+        navigationStack.push({ title: currentTitle, categoryFilter: categoryFilter })
         navigationStackChanged()
+        categoryFilter = ""
         var task = taskModel.get(taskIndex)
         activeSublistTask = taskIndex
         sublistModel.clear()
@@ -112,6 +112,7 @@ PlasmoidItem {
         activeSublistTask = null
         currentModel = taskModel
         currentTitle = entry.title
+        categoryFilter = entry.categoryFilter || ""
     }
 
     function isSublistView() {
