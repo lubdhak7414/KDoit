@@ -255,7 +255,7 @@ PlasmaComponents.ItemDelegate {
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: Kirigami.Units.largeSpacing
-        anchors.rightMargin: Kirigami.Units.smallSpacing
+        anchors.rightMargin: Kirigami.Units.largeSpacing
         spacing: Kirigami.Units.largeSpacing
 
         PlasmaComponents.CheckBox {
@@ -292,7 +292,7 @@ PlasmaComponents.ItemDelegate {
         }
 
         Column {
-            visible: !delegate.isSublistItem
+            visible: !delegate.isSublistItem && !delegate.hovered
             Layout.preferredWidth: Kirigami.Units.gridUnit * 5
             Layout.alignment: Qt.AlignVCenter
             spacing: 0
@@ -322,9 +322,8 @@ PlasmaComponents.ItemDelegate {
             flat: true
             display: PlasmaComponents.AbstractButton.IconOnly
             text: i18n("Edit task")
-            opacity: delegate.hovered ? 1 : 0
+            visible: delegate.hovered
             Layout.preferredWidth: implicitWidth
-            Behavior on opacity { NumberAnimation { duration: 120 } }
             onClicked: delegate.openMenu()
         }
     }
