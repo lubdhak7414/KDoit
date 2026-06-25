@@ -21,12 +21,12 @@ PlasmoidItem {
     property string categoryFilter: ""
     property var distinctCategories: []
     property var presetCategories: [
-        i18n("Work"),
-        i18n("Personal"),
-        i18n("Shopping"),
-        i18n("Health"),
-        i18n("Finance"),
-        i18n("Education")
+        { key: "work", label: i18n("Work") },
+        { key: "personal", label: i18n("Personal") },
+        { key: "shopping", label: i18n("Shopping") },
+        { key: "health", label: i18n("Health") },
+        { key: "finance", label: i18n("Finance") },
+        { key: "education", label: i18n("Education") }
     ]
     property bool isFiltering: searchText.length > 0 || plasmoid.configuration.hideCompleted || categoryFilter !== ""
 
@@ -355,8 +355,10 @@ PlasmoidItem {
 
             Flow {
                 Layout.fillWidth: true
+                Layout.maximumHeight: Kirigami.Units.gridUnit * 2.7
                 spacing: Kirigami.Units.smallSpacing / 2
                 visible: root.distinctCategories.length > 0 && !root.isSublistView()
+                clip: true
 
                 Rectangle {
                     width: allLabel.implicitWidth + Kirigami.Units.largeSpacing

@@ -21,7 +21,7 @@ ListModel {
                 title: t.title !== undefined ? t.title : "",
                 done: t.done === true,
                 priority: t.priority !== undefined ? t.priority : 1,
-                category: t.category !== undefined ? t.category : "",
+                category: (t.category !== undefined ? t.category : "").trim(),
                 createdAt: t.createdAt !== undefined ? t.createdAt : "",
                 dueDate: t.dueDate !== undefined ? t.dueDate : "",
                 sublist: normalizeSublist(t.sublist)

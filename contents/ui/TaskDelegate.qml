@@ -359,10 +359,10 @@ PlasmaComponents.ItemDelegate {
             Repeater {
                 model: root.presetCategories
                 Controls.MenuItem {
-                    required property string modelData
-                    text: modelData
+                    required property var modelData
+                    text: modelData.label
                     onTriggered: {
-                        delegate.listView.model.setProperty(delegate.index, "category", modelData)
+                        delegate.listView.model.setProperty(delegate.index, "category", modelData.key)
                         delegate.taskChanged()
                     }
                 }
@@ -498,6 +498,8 @@ PlasmaComponents.ItemDelegate {
 
         onAccepted: {
             var text = categoryField.text.trim()
+            if (text.length === 0)
+                return
             delegate.listView.model.setProperty(delegate.index, "category", text)
             delegate.taskChanged()
         }
