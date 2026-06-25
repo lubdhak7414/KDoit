@@ -293,7 +293,7 @@ PlasmaComponents.ItemDelegate {
 
         Column {
             visible: !delegate.isSublistItem && !delegate.hovered
-            Layout.preferredWidth: Kirigami.Units.gridUnit * 5
+            Layout.preferredWidth: delegate.hovered ? 0 : Kirigami.Units.gridUnit * 5
             Layout.alignment: Qt.AlignVCenter
             spacing: 0
 
@@ -317,14 +317,20 @@ PlasmaComponents.ItemDelegate {
             }
         }
 
-        PlasmaComponents.Button {
-            icon.name: "entry-edit-symbolic"
-            flat: true
-            display: PlasmaComponents.AbstractButton.IconOnly
-            text: i18n("Edit task")
+        Item {
             visible: delegate.hovered
-            Layout.preferredWidth: implicitWidth
-            onClicked: delegate.openMenu()
+            Layout.fillWidth: true
+            Layout.preferredHeight: delegate.hovered ? delegate.gridSize : 0
+
+            PlasmaComponents.Button {
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                icon.name: "entry-edit-symbolic"
+                flat: true
+                display: PlasmaComponents.AbstractButton.IconOnly
+                text: i18n("Edit task")
+                onClicked: delegate.openMenu()
+            }
         }
     }
 
