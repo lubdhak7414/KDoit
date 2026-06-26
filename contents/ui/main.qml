@@ -308,39 +308,6 @@ PlasmoidItem {
         updateDistinctCategories()
     }
 
-    property var _categoryHues: [
-        { h: 0,   s: 0.75, lDark: 0.49, lLight: 0.69 },
-        { h: 30,  s: 0.65, lDark: 0.38, lLight: 0.53 },
-        { h: 50,  s: 0.65, lDark: 0.30, lLight: 0.42 },
-        { h: 150, s: 0.65, lDark: 0.30, lLight: 0.41 },
-        { h: 185, s: 0.70, lDark: 0.30, lLight: 0.42 },
-        { h: 218, s: 0.80, lDark: 0.51, lLight: 0.67 },
-        { h: 270, s: 0.70, lDark: 0.58, lLight: 0.71 },
-        { h: 330, s: 0.75, lDark: 0.47, lLight: 0.68 }
-    ]
-
-    function _hashCategory(cat) {
-        var hash = 5381
-        for (var i = 0; i < cat.length; i++)
-            hash = ((hash << 5) + hash + cat.charCodeAt(i)) & 0xFFFFFFFF
-        return (hash >>> 0) % _categoryHues.length
-    }
-
-    function categoryColor(cat) {
-        if (cat === "")
-            return "transparent"
-        var entry = _categoryHues[_hashCategory(cat)]
-        var bgLuma = Kirigami.ColorUtils.grayForColor(Kirigami.Theme.backgroundColor)
-        var lightness = bgLuma < 0.5 ? entry.lDark : entry.lLight
-        return Qt.hsla(entry.h / 360, entry.s, lightness, 1.0)
-    }
-
-    function categoryTextColor(cat) {
-        if (cat === "")
-            return "transparent"
-        return Kirigami.Theme.textColor
-    }
-
     function updateDistinctCategories() {
         var cats = {}
         for (var i = 0; i < taskModel.count; i++) {

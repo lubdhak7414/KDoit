@@ -22,7 +22,6 @@ PlasmaComponents.ItemDelegate {
     property bool isSublistItem: false
 
     property bool isDragging: false
-    property bool selected: false
     property real dragOffsetY: 0
     property int startIndex: index
     property int targetIndex: index
@@ -174,7 +173,6 @@ PlasmaComponents.ItemDelegate {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         preventStealing: true
-        enabled: !delegate.isSublistItem || true
 
         onPressed: function (mouse) {
             if (mouse.button === Qt.RightButton)
