@@ -38,6 +38,14 @@ ListModel {
                     done: sub[i].done === true
                 })
             }
+        } else if (sub && typeof sub.count === "number" && typeof sub.get === "function") {
+            for (var j = 0; j < sub.count; j++) {
+                var e = sub.get(j)
+                out.push({
+                    title: e.title !== undefined ? e.title : "",
+                    done: e.done === true
+                })
+            }
         }
         return out
     }

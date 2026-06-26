@@ -95,10 +95,21 @@ PlasmaComponents.ItemDelegate {
         return year === today.getFullYear() && month === today.getMonth() + 1 && day === today.getDate()
     }
 
+    function sublistCount() {
+        if (!sublist)
+            return 0
+        return (typeof sublist.count === "number") ? sublist.count : (sublist.length || 0)
+    }
+
+    function sublistItem(i) {
+        return (typeof sublist.get === "function") ? sublist.get(i) : sublist[i]
+    }
+
     function sublistDone() {
         var n = 0
-        for (var i = 0; i < sublist.length; i++) {
-            if (sublist[i].done === true)
+        var c = sublistCount()
+        for (var i = 0; i < c; i++) {
+            if (sublistItem(i).done === true)
                 n++
         }
         return n
@@ -281,8 +292,8 @@ PlasmaComponents.ItemDelegate {
         }
 
         PlasmaComponents.Label {
-            visible: delegate.sublist.length > 0
-            text: delegate.sublistDone() + "/" + delegate.sublist.length
+            visible: delegate.sublistCount() > 0
+            text: delegate.sublistDone() + "/" + delegate.sublistCount()
             color: Kirigami.Theme.highlightColor
             font.pointSize: Kirigami.Theme.smallFont.pointSize
 

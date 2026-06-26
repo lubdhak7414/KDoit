@@ -180,7 +180,7 @@ PlasmoidItem {
         var task = taskModel.get(taskIndex)
         activeSublistTask = taskIndex
         sublistModel.clear()
-        var sub = task.sublist
+        var sub = taskModel.normalizeSublist(task.sublist)
         for (var i = 0; i < sub.length; i++)
             sublistModel.append(makeSublistRow(sub[i].title, sub[i].done === true))
         currentTitle = task.title
@@ -224,9 +224,7 @@ PlasmoidItem {
             syncSublist()
         } else {
             var t = taskModel.get(index)
-            var subCopy = []
-            for (var s = 0; s < t.sublist.length; s++)
-                subCopy.push({ title: t.sublist[s].title, done: t.sublist[s].done === true })
+            var subCopy = taskModel.normalizeSublist(t.sublist)
             lastDeleted = {
                 index: index,
                 task: {
@@ -272,9 +270,7 @@ PlasmoidItem {
         var rows = []
         for (var i = 0; i < currentModel.count; i++) {
             var t = currentModel.get(i)
-            var sub = []
-            for (var s = 0; s < t.sublist.length; s++)
-                sub.push({ title: t.sublist[s].title, done: t.sublist[s].done === true })
+            var sub = taskModel.normalizeSublist(t.sublist)
             rows.push({
                 title: t.title, done: t.done, priority: t.priority,
                 category: t.category, createdAt: t.createdAt,
