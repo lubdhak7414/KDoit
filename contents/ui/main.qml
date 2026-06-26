@@ -34,6 +34,8 @@ PlasmoidItem {
     property int _lastClickedIndex: -1
 
     function toggleSelect(index) {
+        if (isSublistView())
+            return
         var copy = Object.assign({}, selectedIndices)
         if (copy[index])
             delete copy[index]
@@ -44,6 +46,8 @@ PlasmoidItem {
     }
 
     function rangeSelect(index) {
+        if (isSublistView())
+            return
         if (_lastClickedIndex < 0) {
             toggleSelect(index)
             return
@@ -51,13 +55,20 @@ PlasmoidItem {
         var lo = Math.min(_lastClickedIndex, index)
         var hi = Math.max(_lastClickedIndex, index)
         var copy = Object.assign({}, selectedIndices)
-        for (var i = lo; i <= hi; i++)
-            copy[i] = true
+        for (var i = lo; i <= hi; i++) {
+            if (i < 0 || i >= currentModel.count)
+                continue
+            var it = currentModel.get(i)
+            if (matchesFilter(it.title, it.done, it.category || ""))
+                copy[i] = true
+        }
         selectedIndices = copy
         _lastClickedIndex = index
     }
 
     function selectOnly(index) {
+        if (isSublistView())
+            return
         var keys = Object.keys(selectedIndices)
         if (keys.length === 1 && parseInt(keys[0]) === index) {
             clearSelection()
@@ -79,6 +90,8 @@ PlasmoidItem {
     }
 
     function deleteSelected() {
+        if (isSublistView())
+            return
         var indices = Object.keys(selectedIndices).map(Number)
         if (indices.length === 0)
             return
