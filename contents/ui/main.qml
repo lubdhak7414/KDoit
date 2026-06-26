@@ -173,6 +173,7 @@ PlasmoidItem {
         if (taskIndex < 0 || taskIndex >= taskModel.count)
             return
         dismissUndo()
+        clearSelection()
         navigationStack.push({ title: currentTitle, categoryFilter: categoryFilter })
         navigationStackChanged()
         categoryFilter = ""
@@ -190,6 +191,7 @@ PlasmoidItem {
         if (navigationStack.length === 0)
             return
         dismissUndo()
+        clearSelection()
         var entry = navigationStack.pop()
         navigationStackChanged()
         activeSublistTask = null
@@ -235,6 +237,7 @@ PlasmoidItem {
             }
             taskModel.removeTask(index)
         }
+        clearSelection()
         _updateTrigger++
         updateDistinctCategories()
         undoTimer.restart()
@@ -257,6 +260,7 @@ PlasmoidItem {
             taskModel.insertTask(lastDeleted.index, lastDeleted.task)
         }
         lastDeleted = null
+        clearSelection()
         _updateTrigger++
         updateDistinctCategories()
         undoMessage.visible = false
@@ -303,6 +307,7 @@ PlasmoidItem {
             syncSublist()
         else
             taskModel.save()
+        clearSelection()
         _updateTrigger++
         updateDistinctCategories()
     }
@@ -618,6 +623,7 @@ PlasmoidItem {
                     visible: !root.isSublistView() && root.selectedCount() === 0
                     onClicked: {
                         taskModel.deleteCompleted()
+                        root.clearSelection()
                         root._updateTrigger++
                         root.updateDistinctCategories()
                     }

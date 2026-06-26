@@ -210,8 +210,10 @@ PlasmaComponents.ItemDelegate {
                 delegate.dropping()
                 delegate.isDragging = false
                 delegate.dragOffsetY = 0
-                if (from !== to && typeof delegate.listView.model.moveTask === "function")
+                if (from !== to && typeof delegate.listView.model.moveTask === "function") {
                     delegate.listView.model.moveTask(from, to)
+                    root.clearSelection()
+                }
             } else if (delegate._pressPending) {
                 if (mouse.modifiers & Qt.ControlModifier) {
                     root.toggleSelect(delegate.index)
