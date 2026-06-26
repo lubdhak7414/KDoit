@@ -6,9 +6,13 @@ Kirigami.Page {
     id: root
 
     property int cfg_defaultPriority
+    property int cfg_defaultPriorityDefault: 1
     property bool cfg_hideCompleted
+    property bool cfg_hideCompletedDefault: false
     property bool cfg_verboseDates
+    property bool cfg_verboseDatesDefault: true
     property string cfg_tasksJson
+    property string cfg_tasksJsonDefault: "[]"
 
     title: i18n("General")
 
