@@ -202,9 +202,16 @@ ListModel {
     }
 
     Component.onCompleted: {
-        if (plasmoid.configuration.storagePath === "") {
+        var path = plasmoid.configuration.storagePath
+        if (path === "") {
             var dataHome = Platform.StandardPaths.writableLocation(Platform.StandardPaths.GenericDataLocation)
+            // writableLocation returns a file:// URL; strip the scheme to get a plain fs path
+            if (dataHome.startsWith("file://"))
+                dataHome = dataHome.substring(7)
             plasmoid.configuration.storagePath = dataHome + "/kdoit/tasks.json"
+        } else if (path.startsWith("file://")) {
+            // Fix paths already stored with the file:// prefix from a prior bad run
+            plasmoid.configuration.storagePath = path.substring(7)
         }
         load()
     }
