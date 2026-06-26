@@ -64,7 +64,10 @@ ListModel {
                 sublist: normalizeSublist(t.sublist)
             })
         }
-        plasmoid.configuration.tasksJson = JSON.stringify(arr)
+        try {
+            plasmoid.configuration.tasksJson = JSON.stringify(arr)
+        } catch (e) {
+        }
     }
 
     function addTask(title, priority) {
