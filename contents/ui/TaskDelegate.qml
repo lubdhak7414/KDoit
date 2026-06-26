@@ -348,6 +348,13 @@ PlasmaComponents.ItemDelegate {
     Controls.Menu {
         id: contextMenu
 
+        Controls.MenuItem {
+            text: i18n("Open subtasks")
+            onTriggered: delegate.drillIntoSublist(delegate.index)
+        }
+
+        Controls.MenuSeparator {}
+
         Controls.Menu {
             title: i18n("Due date")
 
