@@ -95,7 +95,8 @@ PlasmoidItem {
         _updateTrigger++
         updateDistinctCategories()
         lastDeleted = { type: "multi", items: removed }
-        dismissUndo()
+        undoTimer.restart()
+        undoMessage.visible = true
     }
 
     property int visibleCount: {
