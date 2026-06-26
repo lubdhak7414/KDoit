@@ -302,38 +302,43 @@ PlasmaComponents.ItemDelegate {
             }
         }
 
-        Column {
-            visible: !delegate.isSublistItem && !delegate.hovered
-            Layout.preferredWidth: delegate.hovered ? 0 : Kirigami.Units.gridUnit * 5
-            Layout.alignment: Qt.AlignVCenter
-            spacing: 0
-
-            PlasmaComponents.Label {
-                anchors.right: parent.right
-                visible: delegate.category !== ""
-                text: "#" + delegate.category
-                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                color: Kirigami.Theme.disabledTextColor
-            }
-
-            PlasmaComponents.Label {
-                anchors.right: parent.right
-                visible: delegate.dueDate !== ""
-                text: delegate.formatDate(delegate.dueDate)
-                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                font.bold: delegate.isOverdue() || delegate.isToday()
-                color: delegate.isOverdue() ? Kirigami.Theme.negativeTextColor
-                     : delegate.isToday() ? Kirigami.Theme.neutralTextColor
-                     : Kirigami.Theme.textColor
-            }
-        }
-
         Item {
-            visible: delegate.hovered
-            Layout.fillWidth: true
-            Layout.preferredHeight: delegate.hovered ? delegate.gridSize : 0
+            // Fixed-width right zone: shows cat/date when idle, edit button when hovered.
+            // Using a single container with fixed width prevents the unconstrained
+            // fillWidth edit button from collapsing to zero and overlapping the
+            // sublist counter to its left.
+            visible: !delegate.isSublistItem || delegate.hovered
+            Layout.preferredWidth: Kirigami.Units.gridUnit * 5
+            Layout.alignment: Qt.AlignVCenter
+
+            Column {
+                visible: !delegate.isSublistItem && !delegate.hovered
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 0
+
+                PlasmaComponents.Label {
+                    anchors.right: parent.right
+                    visible: delegate.category !== ""
+                    text: "#" + delegate.category
+                    font.pointSize: Kirigami.Theme.smallFont.pointSize
+                    color: Kirigami.Theme.disabledTextColor
+                }
+
+                PlasmaComponents.Label {
+                    anchors.right: parent.right
+                    visible: delegate.dueDate !== ""
+                    text: delegate.formatDate(delegate.dueDate)
+                    font.pointSize: Kirigami.Theme.smallFont.pointSize
+                    font.bold: delegate.isOverdue() || delegate.isToday()
+                    color: delegate.isOverdue() ? Kirigami.Theme.negativeTextColor
+                         : delegate.isToday() ? Kirigami.Theme.neutralTextColor
+                         : Kirigami.Theme.textColor
+                }
+            }
 
             PlasmaComponents.Button {
+                visible: delegate.hovered
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.right: parent.right
                 icon.name: "entry-edit-symbolic"
