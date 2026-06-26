@@ -358,7 +358,7 @@ PlasmoidItem {
     }
 
     function matchesFilter(title, done, cat) {
-        if (plasmoid.configuration.hideCompleted && done)
+        if (!isSublistView() && plasmoid.configuration.hideCompleted && done)
             return false
         if (searchText.length > 0 && title.toLowerCase().indexOf(searchText.toLowerCase()) === -1)
             return false
