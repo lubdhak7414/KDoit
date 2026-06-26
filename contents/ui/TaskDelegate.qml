@@ -287,6 +287,9 @@ PlasmaComponents.ItemDelegate {
             Layout.fillWidth: true
             opacity: delegate.done ? 0.6 : 1
             font.strikeout: delegate.done
+            Controls.ToolTip.visible: truncated && delegate.hovered
+            Controls.ToolTip.text: delegate.title
+            Controls.ToolTip.delay: Kirigami.Units.toolTipDelay
         }
 
         PlasmaComponents.Label {
