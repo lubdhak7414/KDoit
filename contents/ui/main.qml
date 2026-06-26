@@ -141,9 +141,26 @@ PlasmoidItem {
         function run(cmd) { connectSource(cmd) }
     }
 
+    Plasma5Support.DataSource {
+        id: fileReader
+        engine: "executable"
+        connectedSources: []
+        onNewData: function(source, data) {
+            disconnectSource(source)
+            if (data["exit code"] === 0)
+                taskModel.loadFromShell(data.stdout)
+        }
+        function run(path) { connectSource("cat '" + path + "'") }
+    }
+
     TaskModel {
         id: taskModel
         onRunShellCmd: function(cmd) { writer.run(cmd) }
+        onRequestFileLoad: function(path) { fileReader.run(path) }
+        onModelReloaded: {
+            root.updateDistinctCategories()
+            root._updateTrigger++
+        }
         Component.onCompleted: root.updateDistinctCategories()
     }
 

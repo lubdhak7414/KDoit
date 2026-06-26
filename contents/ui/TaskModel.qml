@@ -6,6 +6,8 @@ ListModel {
     id: model
 
     signal runShellCmd(string cmd)
+    signal requestFileLoad(string path)
+    signal modelReloaded()
 
     function newUuid() {
         var s = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx"
@@ -88,51 +90,58 @@ ListModel {
                     done: e.done === true
                 })
             }
+        } else if (sub && typeof sub.length === "number") {
+            for (var k = 0; k < sub.length; k++) {
+                var item = sub[k]
+                if (item) out.push({
+                    uuid: (item.uuid !== undefined && item.uuid !== "") ? item.uuid : newUuid(),
+                    title: item.title !== undefined ? item.title : "",
+                    done: item.done === true
+                })
+            }
         }
         return out
-    }
-
-    function readTasksFromFile(path) {
-        var xhr = new XMLHttpRequest()
-        try {
-            xhr.open("GET", "file://" + path, false)
-            xhr.send(null)
-            if (xhr.status === 200 || xhr.status === 0) {
-                var doc = JSON.parse(xhr.responseText)
-                if (doc && Array.isArray(doc.tasks))
-                    return doc.tasks
-                if (Array.isArray(doc))
-                    return doc
-            }
-        } catch(e) {}
-        return null
-    }
-
-    function load() {
-        clear()
-        var path = plasmoid.configuration.storagePath
-        var arr = (path !== "") ? readTasksFromFile(path) : null
-
-        if (arr === null) {
-            if (!plasmoid.configuration.migratedToFile) {
-                arr = _parseConfigJson(plasmoid.configuration.tasksJson)
-            } else {
-                arr = []
-            }
-        }
-
-        for (var i = 0; i < arr.length; i++)
-            append(normalizeTask(arr[i]))
     }
 
     function _parseConfigJson(raw) {
         if (!raw || raw === "" || raw === "[]") return []
         try {
-            var arr = JSON.parse(raw)
-            return Array.isArray(arr) ? arr : []
-        } catch(e) {
+            var parsed = JSON.parse(raw)
+            if (Array.isArray(parsed)) return parsed
+            if (parsed && Array.isArray(parsed.tasks)) return parsed.tasks
             return []
-        }
+        } catch(e) { return [] }
+    }
+
+    // Called by main.qml's fileReader DataSource after a shell-based cat of the file.
+    // Overrides the model with file content (handles Syncthing external changes).
+    function loadFromShell(json) {
+        if (!json || json.trim() === "") return
+        try {
+            var doc = JSON.parse(json)
+            var arr
+            if (doc && Array.isArray(doc.tasks)) arr = doc.tasks
+            else if (Array.isArray(doc)) arr = doc
+            if (!arr) return
+            clear()
+            for (var i = 0; i < arr.length; i++)
+                append(normalizeTask(arr[i]))
+            // Keep tasksJson in sync so next restart doesn't need async read
+            plasmoid.configuration.tasksJson = JSON.stringify(arr)
+            modelReloaded()
+        } catch(e) {}
+    }
+
+    function load() {
+        clear()
+        // XHR for local files is blocked in Plasma's QML environment; read from
+        // KConfig (tasksJson) synchronously and kick off an async shell read of the
+        // file so external changes (e.g. Syncthing) are applied on startup.
+        var arr = _parseConfigJson(plasmoid.configuration.tasksJson)
+        for (var i = 0; i < arr.length; i++)
+            append(normalizeTask(arr[i]))
+        var path = plasmoid.configuration.storagePath
+        if (path !== "") requestFileLoad(path)
     }
 
     function save() {
@@ -155,6 +164,12 @@ ListModel {
             })
         }
         var json = JSON.stringify(doc, null, 2)
+
+        // Keep KConfig in sync so startup load() has reliable data even if file
+        // read is unavailable or the file path changes.
+        plasmoid.configuration.tasksJson = JSON.stringify(doc.tasks)
+
+        // Write to file for Syncthing / external tool access.
         var b64 = _base64(json)
         var dir = path.substring(0, path.lastIndexOf("/"))
         var cmd = "mkdir -p '" + dir + "' && " +
@@ -206,7 +221,20 @@ ListModel {
 
     function setTaskProperty(index, key, value) {
         if (index < 0 || index >= count) return
-        setProperty(index, key, value)
+        if (key === "sublist") {
+            // setProperty with an array doesn't reliably set up a child ListModel
+            // with the correct roles; manipulate the existing child model directly.
+            var sub = get(index).sublist
+            if (sub && typeof sub.clear === "function") {
+                sub.clear()
+                for (var i = 0; i < value.length; i++)
+                    sub.append(value[i])
+            } else {
+                setProperty(index, key, value)
+            }
+        } else {
+            setProperty(index, key, value)
+        }
         touch(index)
         save()
     }
