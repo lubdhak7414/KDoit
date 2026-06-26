@@ -16,6 +16,40 @@ ListModel {
         })
     }
 
+    function _base64(str) {
+        var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
+        var bytes = []
+        for (var i = 0; i < str.length; i++) {
+            var c = str.charCodeAt(i)
+            if (c < 0x80) {
+                bytes.push(c)
+            } else if (c < 0x800) {
+                bytes.push(0xC0 | (c >> 6))
+                bytes.push(0x80 | (c & 0x3F))
+            } else if (c < 0x10000) {
+                bytes.push(0xE0 | (c >> 12))
+                bytes.push(0x80 | ((c >> 6) & 0x3F))
+                bytes.push(0x80 | (c & 0x3F))
+            } else {
+                bytes.push(0xF0 | (c >> 18))
+                bytes.push(0x80 | ((c >> 12) & 0x3F))
+                bytes.push(0x80 | ((c >> 6) & 0x3F))
+                bytes.push(0x80 | (c & 0x3F))
+            }
+        }
+        var result = ""
+        for (var j = 0; j < bytes.length; j += 3) {
+            var b0 = bytes[j]
+            var b1 = j + 1 < bytes.length ? bytes[j + 1] : 0
+            var b2 = j + 2 < bytes.length ? bytes[j + 2] : 0
+            result += chars[b0 >> 2]
+            result += chars[((b0 & 3) << 4) | (b1 >> 4)]
+            result += j + 1 < bytes.length ? chars[((b1 & 15) << 2) | (b2 >> 6)] : "="
+            result += j + 2 < bytes.length ? chars[b2 & 63] : "="
+        }
+        return result
+    }
+
     function touch(index) {
         if (index >= 0 && index < count)
             setProperty(index, "modifiedAt", new Date().toISOString())
@@ -121,7 +155,7 @@ ListModel {
             })
         }
         var json = JSON.stringify(doc, null, 2)
-        var b64 = Qt.btoa(unescape(encodeURIComponent(json)))
+        var b64 = _base64(json)
         var dir = path.substring(0, path.lastIndexOf("/"))
         var cmd = "mkdir -p '" + dir + "' && " +
             "printf '%s' '" + b64 + "' | base64 -d > '" + path + ".tmp' && " +
