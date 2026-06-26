@@ -4,6 +4,7 @@ import QtQuick.Controls as Controls
 import org.kde.plasma.plasmoid
 import org.kde.plasma.components 3.0 as PlasmaComponents
 import org.kde.plasma.extras 2.0 as PlasmaExtras
+import org.kde.plasma.plasma5support as Plasma5Support
 import org.kde.kirigami as Kirigami
 
 PlasmoidItem {
@@ -130,8 +131,19 @@ PlasmoidItem {
 
     Plasmoid.icon: "view-task"
 
+    Plasma5Support.DataSource {
+        id: writer
+        engine: "executable"
+        connectedSources: []
+        onNewData: function(source, data) {
+            disconnectSource(source)
+        }
+        function run(cmd) { connectSource(cmd) }
+    }
+
     TaskModel {
         id: taskModel
+        onRunShellCmd: function(cmd) { writer.run(cmd) }
         Component.onCompleted: root.updateDistinctCategories()
     }
 
@@ -139,8 +151,9 @@ PlasmoidItem {
         id: sublistModel
     }
 
-    function makeSublistRow(title, done) {
+    function makeSublistRow(uuid, title, done) {
         return {
+            uuid: uuid,
             title: title,
             done: done,
             priority: 0,
@@ -157,7 +170,7 @@ PlasmoidItem {
         var arr = []
         for (var i = 0; i < sublistModel.count; i++) {
             var t = sublistModel.get(i)
-            arr.push({ title: t.title, done: t.done })
+            arr.push({ uuid: t.uuid || taskModel.newUuid(), title: t.title, done: t.done })
         }
         taskModel.setTaskProperty(activeSublistTask, "sublist", arr)
     }
@@ -182,7 +195,7 @@ PlasmoidItem {
         sublistModel.clear()
         var sub = taskModel.normalizeSublist(task.sublist)
         for (var i = 0; i < sub.length; i++)
-            sublistModel.append(makeSublistRow(sub[i].title, sub[i].done === true))
+            sublistModel.append(makeSublistRow(sub[i].uuid, sub[i].title, sub[i].done === true))
         currentTitle = task.title
         currentModel = sublistModel
     }
@@ -206,7 +219,7 @@ PlasmoidItem {
 
     function addToCurrent(title) {
         if (isSublistView()) {
-            sublistModel.append(makeSublistRow(title, false))
+            sublistModel.append(makeSublistRow(taskModel.newUuid(), title, false))
             syncSublist()
         } else {
             taskModel.addTask(title, plasmoid.configuration.defaultPriority)
@@ -218,7 +231,7 @@ PlasmoidItem {
             var st = sublistModel.get(index)
             lastDeleted = {
                 index: index,
-                task: { title: st.title, done: st.done, priority: 0, category: "", createdAt: "", dueDate: "", sublist: [] }
+                task: { uuid: st.uuid, title: st.title, done: st.done, priority: 0, category: "", createdAt: "", dueDate: "", sublist: [] }
             }
             sublistModel.remove(index)
             syncSublist()
@@ -228,8 +241,10 @@ PlasmoidItem {
             lastDeleted = {
                 index: index,
                 task: {
+                    uuid: t.uuid,
                     title: t.title, done: t.done, priority: t.priority,
                     category: t.category, createdAt: t.createdAt,
+                    modifiedAt: t.modifiedAt,
                     dueDate: t.dueDate, sublist: subCopy
                 }
             }
@@ -252,7 +267,7 @@ PlasmoidItem {
             }
         } else if (isSublistView()) {
             sublistModel.insert(Math.min(lastDeleted.index, sublistModel.count),
-                makeSublistRow(lastDeleted.task.title, lastDeleted.task.done))
+                makeSublistRow(lastDeleted.task.uuid || taskModel.newUuid(), lastDeleted.task.title, lastDeleted.task.done))
             syncSublist()
         } else {
             taskModel.insertTask(lastDeleted.index, lastDeleted.task)
@@ -272,8 +287,10 @@ PlasmoidItem {
             var t = currentModel.get(i)
             var sub = taskModel.normalizeSublist(t.sublist)
             rows.push({
+                uuid: t.uuid,
                 title: t.title, done: t.done, priority: t.priority,
                 category: t.category, createdAt: t.createdAt,
+                modifiedAt: t.modifiedAt || "",
                 dueDate: t.dueDate, sublist: sub
             })
         }

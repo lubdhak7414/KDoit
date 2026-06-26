@@ -13,11 +13,43 @@ Kirigami.Page {
     property bool cfg_verboseDatesDefault: true
     property string cfg_tasksJson
     property string cfg_tasksJsonDefault: "[]"
+    property string cfg_storagePath
+    property string cfg_storagePathDefault: ""
+    property bool cfg_migratedToFile
+    property bool cfg_migratedToFileDefault: false
 
     title: i18n("General")
 
     Kirigami.FormLayout {
         anchors.fill: parent
+
+        PlasmaComponents.TextField {
+            id: pathField
+            Kirigami.FormData.label: i18n("Tasks file:")
+            implicitWidth: Kirigami.Units.gridUnit * 20
+            placeholderText: i18n("e.g. /home/user/.local/share/kdoit/tasks.json")
+            Component.onCompleted: text = root.cfg_storagePath
+            onEditingFinished: {
+                var v = text.trim()
+                if (v.indexOf("'") === -1 && v.indexOf("\n") === -1)
+                    root.cfg_storagePath = v
+                else
+                    text = root.cfg_storagePath
+            }
+        }
+
+        PlasmaComponents.Label {
+            Kirigami.FormData.label: ""
+            text: i18n("Point this at a synced folder to share tasks across machines.")
+            font.pointSize: Kirigami.Theme.smallFont.pointSize
+            color: Kirigami.Theme.disabledTextColor
+            wrapMode: Text.WordWrap
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 20
+        }
+
+        Kirigami.Separator {
+            Kirigami.FormData.isSection: true
+        }
 
         PlasmaComponents.ComboBox {
             id: priorityCombo

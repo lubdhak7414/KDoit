@@ -6,8 +6,16 @@
     <kcfgfile name=""/>
     <group name="General">
         <entry name="tasksJson" type="String">
-            <label>Serialized task data</label>
+            <label>Serialized task data (legacy; migrated to file on first run)</label>
             <default>[]</default>
+        </entry>
+        <entry name="storagePath" type="String">
+            <label>Absolute path to the tasks JSON file</label>
+            <default></default>
+        </entry>
+        <entry name="migratedToFile" type="Bool">
+            <label>Whether tasks have been migrated from plasmoid config to file storage</label>
+            <default>false</default>
         </entry>
         <entry name="defaultPriority" type="Int">
             <label>Default priority for new tasks (0=Low, 1=Medium, 2=High)</label>
