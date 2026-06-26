@@ -6,6 +6,9 @@
     "Version": "0.1.0",
     "Category": "Productivity",
     "Icon": "view-task",
+    "Website": "https://github.com/lubdhak7414/KDoit",
+    "BugTracker": "https://github.com/lubdhak7414/KDoit/issues",
+    "License": "GPLv3",
     "Authors": [{ "Name": "Safwan Usaid Lubdhak", "Email": "hello@saf1.me" }]
   },
   "X-Plasma-API-Minimum-Version": "6.0",
