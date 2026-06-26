@@ -1,16 +1,20 @@
 import QtQuick
-import org.kde.kcmutils as KCM
 import org.kde.plasma.components 3.0 as PlasmaComponents
 import org.kde.kirigami as Kirigami
 
-KCM.SimpleKCM {
+Kirigami.Page {
     id: root
 
     property int cfg_defaultPriority
     property bool cfg_hideCompleted
     property bool cfg_verboseDates
+    property string cfg_tasksJson
+
+    title: i18n("General")
 
     Kirigami.FormLayout {
+        anchors.fill: parent
+
         PlasmaComponents.ComboBox {
             id: priorityCombo
             Kirigami.FormData.label: i18n("Default priority:")
