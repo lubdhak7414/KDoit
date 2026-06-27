@@ -101,7 +101,14 @@ PlasmoidItem {
             var idx = indices[i]
             if (idx >= 0 && idx < currentModel.count) {
                 var t = currentModel.get(idx)
-                removed.push({ index: idx, task: JSON.parse(JSON.stringify(t)) })
+                var subCopy = taskModel.normalizeSublist(t.sublist)
+                removed.push({ index: idx, task: {
+                    uuid: t.uuid,
+                    title: t.title, done: t.done, priority: t.priority,
+                    category: t.category, createdAt: t.createdAt,
+                    modifiedAt: t.modifiedAt,
+                    dueDate: t.dueDate, sublist: subCopy
+                }})
             }
         }
         currentModel.removeTasks(indices)
@@ -412,7 +419,7 @@ PlasmoidItem {
                     id: categoryCombo
                     visible: root.distinctCategories.length > 0 && !root.isSublistView()
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 6
-                    model: [i18n("All")].concat(root.distinctCategories.map(function(c) { return c }))
+                    model: [i18n("All")].concat(root.distinctCategories)
                     currentIndex: {
                         if (root.categoryFilter === "") return 0
                         var idx = root.distinctCategories.indexOf(root.categoryFilter)
@@ -624,8 +631,8 @@ PlasmoidItem {
                         root._updateTrigger++
                         root.updateDistinctCategories()
                     }
-                    }
                 }
             }
+        }
     }
 }

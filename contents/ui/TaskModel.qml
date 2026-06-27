@@ -90,15 +90,6 @@ ListModel {
                     done: e.done === true
                 })
             }
-        } else if (sub && typeof sub.length === "number") {
-            for (var k = 0; k < sub.length; k++) {
-                var item = sub[k]
-                if (item) out.push({
-                    uuid: (item.uuid !== undefined && item.uuid !== "") ? item.uuid : newUuid(),
-                    title: item.title !== undefined ? item.title : "",
-                    done: item.done === true
-                })
-            }
         }
         return out
     }
@@ -108,7 +99,6 @@ ListModel {
         try {
             var parsed = JSON.parse(raw)
             if (Array.isArray(parsed)) return parsed
-            if (parsed && Array.isArray(parsed.tasks)) return parsed.tasks
             return []
         } catch(e) { return [] }
     }

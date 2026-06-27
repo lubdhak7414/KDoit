@@ -31,7 +31,7 @@ Kirigami.Page {
             Component.onCompleted: text = root.cfg_storagePath
             onEditingFinished: {
                 var v = text.trim()
-                if (v.indexOf("'") === -1 && v.indexOf("\n") === -1)
+                if (v !== "" && v.indexOf("'") === -1 && v.indexOf("\n") === -1)
                     root.cfg_storagePath = v
                 else
                     text = root.cfg_storagePath

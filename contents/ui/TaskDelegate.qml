@@ -91,6 +91,9 @@ PlasmaComponents.ItemDelegate {
         var year = parseInt(parts[0])
         var month = parseInt(parts[1])
         var day = parseInt(parts[2])
+        var d = new Date(year, month - 1, day)
+        if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day)
+            return false
         return year === today.getFullYear() && month === today.getMonth() + 1 && day === today.getDate()
     }
 
@@ -145,7 +148,6 @@ PlasmaComponents.ItemDelegate {
     }
 
     transform: Translate {
-        id: translate
         y: delegate.isDragging ? delegate.dragOffsetY
                                : (delegate.shouldMakeSpace ? delegate.gridSize * delegate.spaceDirection : 0)
         Behavior on y {
@@ -281,15 +283,20 @@ PlasmaComponents.ItemDelegate {
         }
 
         PlasmaComponents.Label {
+            id: titleLabel
             text: delegate.title
             elide: Text.ElideRight
             maximumLineCount: 1
             Layout.fillWidth: true
             opacity: delegate.done ? 0.6 : 1
             font.strikeout: delegate.done
-            Controls.ToolTip.visible: truncated && delegate.hovered
-            Controls.ToolTip.text: delegate.title
-            Controls.ToolTip.delay: Kirigami.Units.toolTipDelay
+
+            Controls.ToolTip {
+                visible: titleLabel.truncated && delegate.hovered
+                delay: Kirigami.Units.toolTipDelay
+                text: titleLabel.text
+                width: Math.min(implicitWidth, Kirigami.Units.gridUnit * 20)
+            }
         }
 
         PlasmaComponents.Label {
