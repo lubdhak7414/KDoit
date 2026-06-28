@@ -516,7 +516,7 @@ ListModel {
             var parsed = _parseMarkdown(mdText)
             var result = mergeImportedTasks(parsed)
             if (result.imported > 0 || result.updated > 0)
-                _saveJsonOnly()
+                save()
             return result
         } catch(e) {
             console.error("KDoit markdown import failed:", e)
@@ -604,11 +604,15 @@ ListModel {
     }
 
     function deleteCompleted() {
+        var changed = false
         for (var i = count - 1; i >= 0; i--) {
-            if (get(i).done === true)
+            if (get(i).done === true) {
                 remove(i)
+                changed = true
+            }
         }
-        save()
+        if (changed)
+            save()
     }
 
     function clearCategoryFromAll(oldCategory) {

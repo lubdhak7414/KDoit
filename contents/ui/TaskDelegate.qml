@@ -175,13 +175,17 @@ PlasmaComponents.ItemDelegate {
         return Controls.Overlay.overlay || delegate.Window?.contentItem
     }
 
-    function openMenu() {
+    function _capturePosition() {
         var target = _popupParent()
         if (target) {
             var pos = delegate.mapToItem(target, delegate.width / 2, delegate.height / 2)
             delegate._menuOpenX = pos.x
             delegate._menuOpenY = pos.y
         }
+    }
+
+    function openMenu() {
+        _capturePosition()
         if (delegate.isSublistItem)
             sublistMenu.popup()
         else
@@ -385,7 +389,12 @@ PlasmaComponents.ItemDelegate {
                 flat: true
                 display: PlasmaComponents.AbstractButton.IconOnly
                 text: i18n("Edit task")
-                onClicked: delegate.openMenu()
+                onClicked: {
+                    _capturePosition()
+                    renameField.text = delegate.title
+                    positionPopup(renameDialog)
+                    renameDialog.open()
+                }
             }
         }
     }
