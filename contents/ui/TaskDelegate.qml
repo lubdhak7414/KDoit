@@ -29,6 +29,8 @@ PlasmaComponents.ItemDelegate {
     property bool _pressPending: false
     property real _pressX: 0
     property real _pressY: 0
+    property real _menuOpenX: 0
+    property real _menuOpenY: 0
 
     property bool shouldMakeSpace: {
         if (!listView || !listView.currentDragActive || isDragging)
@@ -169,11 +171,33 @@ PlasmaComponents.ItemDelegate {
         }
     }
 
+    function _popupParent() {
+        return Controls.Overlay.overlay || delegate.Window?.contentItem
+    }
+
     function openMenu() {
+        var target = _popupParent()
+        if (target) {
+            var pos = delegate.mapToItem(target, delegate.width / 2, delegate.height / 2)
+            delegate._menuOpenX = pos.x
+            delegate._menuOpenY = pos.y
+        }
         if (delegate.isSublistItem)
             sublistMenu.popup()
         else
             contextMenu.popup()
+    }
+
+    function positionPopup(popup) {
+        var target = _popupParent()
+        if (!target) return
+        var dx = delegate._menuOpenX - popup.width / 2
+        var dy = delegate._menuOpenY + Kirigami.Units.gridUnit
+        dx = Math.max(0, Math.min(dx, target.width - popup.width))
+        var ph = popup.height || popup.implicitHeight || Kirigami.Units.gridUnit * 8
+        dy = Math.max(0, Math.min(dy, target.height - ph))
+        popup.x = dx
+        popup.y = dy
     }
 
     MouseArea {
@@ -397,7 +421,10 @@ PlasmaComponents.ItemDelegate {
             }
             Controls.MenuItem {
                 text: i18n("Custom date...")
-                onTriggered: dateDialog.open()
+                onTriggered: {
+                    positionPopup(dateDialog)
+                    dateDialog.open()
+                }
             }
             Controls.MenuItem {
                 text: i18n("Delete date")
@@ -465,6 +492,7 @@ PlasmaComponents.ItemDelegate {
                 text: i18n("Custom...")
                 onTriggered: {
                     categoryField.text = delegate.category
+                    positionPopup(categoryDialog)
                     categoryDialog.open()
                 }
             }
@@ -474,6 +502,7 @@ PlasmaComponents.ItemDelegate {
             text: i18n("Rename...")
             onTriggered: {
                 renameField.text = delegate.title
+                positionPopup(renameDialog)
                 renameDialog.open()
             }
         }
@@ -493,6 +522,7 @@ PlasmaComponents.ItemDelegate {
             text: i18n("Rename...")
             onTriggered: {
                 renameField.text = delegate.title
+                positionPopup(renameDialog)
                 renameDialog.open()
             }
         }
@@ -509,12 +539,13 @@ PlasmaComponents.ItemDelegate {
         return d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (day < 10 ? "0" + day : day)
     }
 
-    Controls.Dialog {
+    Controls.Popup {
         id: dateDialog
-        title: i18n("Custom date")
         modal: true
-        standardButtons: Controls.Dialog.Ok | Controls.Dialog.Cancel
-        anchors.centerIn: Controls.Overlay.overlay
+        closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
+        parent: _popupParent()
+        padding: Kirigami.Units.smallSpacing
+        implicitWidth: Kirigami.Units.gridUnit * 22
 
         onOpened: {
             var parts = delegate.dueDate.split("-")
@@ -530,88 +561,175 @@ PlasmaComponents.ItemDelegate {
             }
         }
 
-        onAccepted: {
-            var m = monthSpin.value
-            var day = daySpin.value
-            var iso = yearSpin.value + "-" + (m < 10 ? "0" + m : m) + "-" + (day < 10 ? "0" + day : day)
-            delegate.listView.model.setProperty(delegate.index, "dueDate", iso)
-            delegate.emitTaskChanged()
-        }
-
-        RowLayout {
+        contentItem: ColumnLayout {
             spacing: Kirigami.Units.smallSpacing
 
-            PlasmaComponents.SpinBox {
-                id: daySpin
-                from: 1
-                to: 31
+            Kirigami.Heading {
+                level: 4
+                text: i18n("Custom date")
+                Layout.fillWidth: true
             }
-            PlasmaComponents.SpinBox {
-                id: monthSpin
-                from: 1
-                to: 12
-                onValueChanged: {
-                    var maxDay = new Date(yearSpin.value, monthSpin.value, 0).getDate()
-                    daySpin.to = maxDay
-                    if (daySpin.value > maxDay) daySpin.value = maxDay
+
+            RowLayout {
+                spacing: Kirigami.Units.smallSpacing
+
+                PlasmaComponents.SpinBox {
+                    id: daySpin
+                    from: 1
+                    to: 31
+                }
+                PlasmaComponents.SpinBox {
+                    id: monthSpin
+                    from: 1
+                    to: 12
+                    onValueChanged: {
+                        var maxDay = new Date(yearSpin.value, monthSpin.value, 0).getDate()
+                        daySpin.to = maxDay
+                        if (daySpin.value > maxDay) daySpin.value = maxDay
+                    }
+                }
+                PlasmaComponents.SpinBox {
+                    id: yearSpin
+                    from: 2000
+                    to: 2100
+                    onValueChanged: {
+                        var maxDay = new Date(yearSpin.value, monthSpin.value, 0).getDate()
+                        daySpin.to = maxDay
+                        if (daySpin.value > maxDay) daySpin.value = maxDay
+                    }
                 }
             }
-            PlasmaComponents.SpinBox {
-                id: yearSpin
-                from: 2000
-                to: 2100
-                onValueChanged: {
-                    var maxDay = new Date(yearSpin.value, monthSpin.value, 0).getDate()
-                    daySpin.to = maxDay
-                    if (daySpin.value > maxDay) daySpin.value = maxDay
+
+            RowLayout {
+                spacing: Kirigami.Units.smallSpacing
+                Item { Layout.fillWidth: true }
+                PlasmaComponents.Button {
+                    text: i18n("Cancel")
+                    onClicked: dateDialog.close()
+                }
+                PlasmaComponents.Button {
+                    text: i18n("OK")
+                    onClicked: {
+                        var m = monthSpin.value
+                        var day = daySpin.value
+                        var iso = yearSpin.value + "-" + (m < 10 ? "0" + m : m) + "-" + (day < 10 ? "0" + day : day)
+                        delegate.listView.model.setProperty(delegate.index, "dueDate", iso)
+                        delegate.emitTaskChanged()
+                        dateDialog.close()
+                    }
                 }
             }
         }
     }
 
-    Controls.Dialog {
+    Controls.Popup {
         id: renameDialog
-        title: i18n("Rename task")
         modal: true
-        standardButtons: Controls.Dialog.Ok | Controls.Dialog.Cancel
-        anchors.centerIn: Controls.Overlay.overlay
+        closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
+        parent: _popupParent()
+        padding: Kirigami.Units.smallSpacing
+        implicitWidth: Kirigami.Units.gridUnit * 16
 
-        onAccepted: {
-            var text = renameField.text.trim()
-            if (text.length > 0) {
-                delegate.listView.model.setProperty(delegate.index, "title", text)
-                delegate.emitTaskChanged()
+        onOpened: renameField.forceActiveFocus()
+
+        contentItem: ColumnLayout {
+            spacing: Kirigami.Units.smallSpacing
+
+            Kirigami.Heading {
+                level: 4
+                text: i18n("Rename task")
+                Layout.fillWidth: true
             }
-        }
 
-        PlasmaComponents.TextField {
-            id: renameField
-            implicitWidth: Kirigami.Units.gridUnit * 14
-            onAccepted: renameDialog.accept()
+            PlasmaComponents.TextField {
+                id: renameField
+                implicitWidth: Kirigami.Units.gridUnit * 14
+                onAccepted: {
+                    var text = renameField.text.trim()
+                    if (text.length > 0) {
+                        delegate.listView.model.setProperty(delegate.index, "title", text)
+                        delegate.emitTaskChanged()
+                    }
+                    renameDialog.close()
+                }
+            }
+
+            RowLayout {
+                spacing: Kirigami.Units.smallSpacing
+                Item { Layout.fillWidth: true }
+                PlasmaComponents.Button {
+                    text: i18n("Cancel")
+                    onClicked: renameDialog.close()
+                }
+                PlasmaComponents.Button {
+                    text: i18n("OK")
+                    onClicked: {
+                        var text = renameField.text.trim()
+                        if (text.length > 0) {
+                            delegate.listView.model.setProperty(delegate.index, "title", text)
+                            delegate.emitTaskChanged()
+                        }
+                        renameDialog.close()
+                    }
+                }
+            }
         }
     }
 
-    Controls.Dialog {
+    Controls.Popup {
         id: categoryDialog
-        title: i18n("Set category")
         modal: true
-        standardButtons: Controls.Dialog.Ok | Controls.Dialog.Cancel
-        anchors.centerIn: Controls.Overlay.overlay
+        closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
+        parent: _popupParent()
+        padding: Kirigami.Units.smallSpacing
+        implicitWidth: Kirigami.Units.gridUnit * 16
 
-        onAccepted: {
-            var text = categoryField.text.trim()
-            if (text.length === 0)
-                return
-            root.addManagedCategory(text)
-            delegate.listView.model.setProperty(delegate.index, "category", text)
-            delegate.emitTaskChanged()
-        }
+        onOpened: categoryField.forceActiveFocus()
 
-        PlasmaComponents.TextField {
-            id: categoryField
-            implicitWidth: Kirigami.Units.gridUnit * 14
-            placeholderText: i18n("Category name...")
-            onAccepted: categoryDialog.accept()
+        contentItem: ColumnLayout {
+            spacing: Kirigami.Units.smallSpacing
+
+            Kirigami.Heading {
+                level: 4
+                text: i18n("Set category")
+                Layout.fillWidth: true
+            }
+
+            PlasmaComponents.TextField {
+                id: categoryField
+                implicitWidth: Kirigami.Units.gridUnit * 14
+                placeholderText: i18n("Category name...")
+                onAccepted: {
+                    var text = categoryField.text.trim()
+                    if (text.length > 0) {
+                        root.addManagedCategory(text)
+                        delegate.listView.model.setProperty(delegate.index, "category", text)
+                        delegate.emitTaskChanged()
+                    }
+                    categoryDialog.close()
+                }
+            }
+
+            RowLayout {
+                spacing: Kirigami.Units.smallSpacing
+                Item { Layout.fillWidth: true }
+                PlasmaComponents.Button {
+                    text: i18n("Cancel")
+                    onClicked: categoryDialog.close()
+                }
+                PlasmaComponents.Button {
+                    text: i18n("OK")
+                    onClicked: {
+                        var text = categoryField.text.trim()
+                        if (text.length > 0) {
+                            root.addManagedCategory(text)
+                            delegate.listView.model.setProperty(delegate.index, "category", text)
+                            delegate.emitTaskChanged()
+                        }
+                        categoryDialog.close()
+                    }
+                }
+            }
         }
     }
 }
