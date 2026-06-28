@@ -222,7 +222,7 @@ PlasmoidItem {
             root.dismissUndo()
             // If the user is viewing a sublist, refresh it from the updated task model
             // so remote sublist changes don't get overwritten by the stale snapshot.
-            // Use UUID lookup — deletion propagation may have shifted model indices.
+            // Use UUID lookup -deletion propagation may have shifted model indices.
             if (root.isSublistView() && root._activeSublistUuid !== "") {
                 var newIdx = -1
                 for (var n = 0; n < taskModel.count; n++) {
@@ -274,7 +274,7 @@ PlasmoidItem {
     function syncSublist() {
         if (_activeSublistUuid === "")
             return
-        // Re-derive the index by UUID — remote deletions may have shifted indices.
+        // Re-derive the index by UUID -remote deletions may have shifted indices.
         var syncIdx = -1
         for (var n = 0; n < taskModel.count; n++) {
             if (taskModel.get(n).uuid === _activeSublistUuid) { syncIdx = n; break }
@@ -790,7 +790,6 @@ PlasmoidItem {
 
                 PlasmaComponents.Button {
                     icon.name: "edit-clear-history-symbolic"
-                    icon.color: Kirigami.Theme.highlightColor
                     flat: true
                     display: PlasmaComponents.AbstractButton.IconOnly
                     visible: !root.isSublistView() && root.selectedCount() === 0

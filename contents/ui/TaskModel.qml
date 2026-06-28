@@ -143,13 +143,13 @@ ListModel {
 
             if (incoming.length === 0) {
                 if (count > 0) {
-                    // Remote wiped all tasks — propagate deletion
+                    // Remote wiped all tasks -propagate deletion
                     for (var w = count - 1; w >= 0; w--)
                         remove(w)
                     save()
                     modelReloaded()
                 } else if (!plasmoid.configuration.migratedToFile) {
-                    // Empty file on a fresh instance — inject defaults
+                    // Empty file on a fresh instance -inject defaults
                     _addDefaultTasks()
                     save()
                     modelReloaded()
@@ -183,7 +183,7 @@ ListModel {
                 if (!incoming[j].modifiedAt) inc.modifiedAt = "1970-01-01T00:00:00.000Z"
                 var idx = currentByUuid[inc.uuid]
                 if (idx !== undefined) {
-                    // Task exists locally — update in-place if incoming is newer
+                    // Task exists locally -update in-place if incoming is newer
                     var existing = get(idx)
                     if (inc.modifiedAt > existing.modifiedAt) {
                         setProperty(idx, "title", inc.title)
@@ -194,7 +194,7 @@ ListModel {
                             setProperty(idx, "createdAt", inc.createdAt)
                         setProperty(idx, "modifiedAt", inc.modifiedAt)
                         setProperty(idx, "dueDate", inc.dueDate)
-                        // Sublist is a child ListModel — update in-place
+                        // Sublist is a child ListModel -update in-place
                         var sub = existing.sublist
                         if (sub && typeof sub.clear === "function") {
                             sub.clear()
@@ -206,7 +206,7 @@ ListModel {
                         changed = true
                     }
                 } else {
-                    // New task from remote — append and register in the map so a
+                    // New task from remote -append and register in the map so a
                     // duplicate UUID in the incoming file is not appended twice.
                     append(inc)
                     currentByUuid[inc.uuid] = count - 1
@@ -227,7 +227,7 @@ ListModel {
                 }
             }
 
-            // Only write back when the merge changed something — avoids an infinite
+            // Only write back when the merge changed something -avoids an infinite
             // poll→read→save→mtime-change→poll loop. Note: save() bumps the file mtime
             // so one extra poll cycle fires per sync event; the second loadFromShell
             // finds changed=false and breaks the cycle.
@@ -244,7 +244,7 @@ ListModel {
         var now = new Date().toISOString()
         append(normalizeTask({
             uuid: newUuid(),
-            title: "Getting started — tap 0/2 to see tips",
+            title: "Getting started -tap 0/2 to see tips",
             done: false,
             priority: 0,
             category: "",
@@ -479,7 +479,7 @@ ListModel {
                     updated++
                 }
             } else {
-                // No UUID match — skip if a task with the same title already exists
+                // No UUID match -skip if a task with the same title already exists
                 // (prevents duplication when importing a file without UUID comments)
                 var existsByTitle = false
                 for (var ti = 0; ti < count; ti++) {

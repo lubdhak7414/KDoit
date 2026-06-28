@@ -2,10 +2,10 @@
 
 ## Conventions
 
-- Pure QML + Kirigami/Plasma components — no frameworks or build tooling.
-- Theme colors via `Kirigami.Theme.*`, spacing via `Kirigami.Units.*` — never hardcode.
+- Pure QML + Kirigami/Plasma components -no frameworks or build tooling.
+- Theme colors via `Kirigami.Theme.*`, spacing via `Kirigami.Units.*` -never hardcode.
 - Wrap user-facing strings in `i18n()`.
-- Keep changes focused — no unrelated refactors.
+- Keep changes focused -no unrelated refactors.
 
 ## Workflow
 
