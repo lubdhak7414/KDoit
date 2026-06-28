@@ -2,10 +2,6 @@
 
 A to-do list widget for KDE Plasma 6 with nested sub-tasks, priorities, and due dates.
 
-<p align="center">
-  <img src="assets/preview.png" width="60%">
-</p>
-
 Set priorities with color coding, assign due dates that highlight when overdue, and nest sub-lists to break down complex work. Reorder by drag-and-drop, filter with search, and hide completed tasks. Tasks persist to a JSON file and sync live across machines via Syncthing or any file-sync tool.
 
 ## Installation
