@@ -220,6 +220,7 @@ PlasmoidItem {
             root.updateDistinctCategories()
             root._updateTrigger++
             root.dismissUndo()
+            root.clearSelection()
             // If the user is viewing a sublist, refresh it from the updated task model
             // so remote sublist changes don't get overwritten by the stale snapshot.
             // Use UUID lookup -deletion propagation may have shifted model indices.
@@ -379,8 +380,17 @@ PlasmoidItem {
         if (lastDeleted.type === "multi") {
             var items = lastDeleted.items.slice().sort(function(a, b) { return a.index - b.index })
             for (var i = 0; i < items.length; i++) {
-                taskModel.insertTask(items[i].index, items[i].task)
+                var t = items[i].task
+                var nt = taskModel.normalizeTask(t)
+                var clamped = Math.max(0, Math.min(items[i].index, taskModel.count))
+                taskModel.insert(clamped, {
+                    uuid: nt.uuid, title: nt.title, done: nt.done,
+                    priority: nt.priority, category: nt.category,
+                    createdAt: nt.createdAt, modifiedAt: nt.modifiedAt,
+                    dueDate: nt.dueDate, sublist: taskModel.normalizeSublist(nt.sublist)
+                })
             }
+            taskModel.save()
         } else if (isSublistView()) {
             sublistModel.insert(Math.min(lastDeleted.index, sublistModel.count),
                 makeSublistRow(lastDeleted.task.uuid || taskModel.newUuid(), lastDeleted.task.title, lastDeleted.task.done))
@@ -469,7 +479,9 @@ PlasmoidItem {
 
     function _parseManagedCategories() {
         try {
-            return JSON.parse(plasmoid.configuration.managedCategories || '["Work","Personal","Education"]')
+            var parsed = JSON.parse(plasmoid.configuration.managedCategories || '["Work","Personal","Education"]')
+            if (!Array.isArray(parsed)) return ["Work", "Personal", "Education"]
+            return parsed.filter(function(x) { return typeof x === "string" })
         } catch(e) {
             return ["Work", "Personal", "Education"]
         }

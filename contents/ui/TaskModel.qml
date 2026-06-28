@@ -1,5 +1,5 @@
 import QtQuick
-import Qt.labs.platform as Platform
+import QtCore
 import org.kde.plasma.plasmoid
 
 ListModel {
@@ -587,17 +587,18 @@ ListModel {
     }
 
     function insertTask(index, task) {
+        var t = normalizeTask(task)
         var clamped = Math.max(0, Math.min(index, count))
         insert(clamped, {
-            uuid: task.uuid || newUuid(),
-            title: task.title,
-            done: task.done,
-            priority: task.priority,
-            category: task.category,
-            createdAt: task.createdAt,
-            modifiedAt: task.modifiedAt || new Date().toISOString(),
-            dueDate: task.dueDate,
-            sublist: normalizeSublist(task.sublist)
+            uuid: t.uuid,
+            title: t.title,
+            done: t.done,
+            priority: t.priority,
+            category: t.category,
+            createdAt: t.createdAt,
+            modifiedAt: t.modifiedAt,
+            dueDate: t.dueDate,
+            sublist: normalizeSublist(t.sublist)
         })
         save()
     }
@@ -654,7 +655,7 @@ ListModel {
     Component.onCompleted: {
         var path = plasmoid.configuration.storagePath
         if (path === "") {
-            var dataHome = Platform.StandardPaths.writableLocation(Platform.StandardPaths.GenericDataLocation).toString()
+            var dataHome = StandardPaths.writableLocation(StandardPaths.GenericDataLocation).toString()
             if (dataHome.startsWith("file://"))
                 dataHome = dataHome.substring(7)
             plasmoid.configuration.storagePath = dataHome + "/kdoit/tasks.json"

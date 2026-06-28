@@ -55,7 +55,7 @@
         </entry>
         <entry name="listTitle" type="String">
             <label>Header title shown above the task list</label>
-            <default>K Do it!</default>
+            <default></default>
         </entry>
     </group>
 </kcfg>

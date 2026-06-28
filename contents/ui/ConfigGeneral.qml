@@ -34,7 +34,8 @@ Kirigami.Page {
     property string cfg_listTitleDefault: "K Do it!"
     property var _parsedManagedCategories: {
         try {
-            return JSON.parse(root.cfg_managedCategories || '["Work","Personal","Education"]')
+            var v = JSON.parse(root.cfg_managedCategories || '["Work","Personal","Education"]')
+            return Array.isArray(v) ? v : ["Work", "Personal", "Education"]
         } catch(e) {
             return ["Work", "Personal", "Education"]
         }
@@ -209,10 +210,13 @@ Kirigami.Page {
                     implicitWidth: Kirigami.Units.gridUnit * 1.6
                     implicitHeight: Kirigami.Units.gridUnit * 1.6
                     onClicked: {
-                        var cats = JSON.parse(root.cfg_managedCategories || '[]')
+                        var cats
+                        try { cats = JSON.parse(root.cfg_managedCategories || '[]') }
+                        catch(e) { cats = [] }
+                        if (!Array.isArray(cats)) cats = []
                         var lower = modelData.toLowerCase()
                         for (var i = cats.length - 1; i >= 0; i--) {
-                            if (cats[i].toLowerCase() === lower) { cats.splice(i, 1); break }
+                            if (typeof cats[i] === "string" && cats[i].toLowerCase() === lower) { cats.splice(i, 1); break }
                         }
                         root.cfg_managedCategories = JSON.stringify(cats)
                     }
@@ -238,10 +242,13 @@ Kirigami.Page {
                 onClicked: {
                     var name = newCategoryField.text.trim()
                     if (name === "") return
-                    var cats = JSON.parse(root.cfg_managedCategories || '[]')
+                    var cats
+                    try { cats = JSON.parse(root.cfg_managedCategories || '[]') }
+                    catch(e) { cats = [] }
+                    if (!Array.isArray(cats)) cats = []
                     var lower = name.toLowerCase()
                     for (var i = 0; i < cats.length; i++) {
-                        if (cats[i].toLowerCase() === lower) { newCategoryField.text = ""; return }
+                        if (typeof cats[i] === "string" && cats[i].toLowerCase() === lower) { newCategoryField.text = ""; return }
                     }
                     cats.push(name)
                     root.cfg_managedCategories = JSON.stringify(cats)

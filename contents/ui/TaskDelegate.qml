@@ -191,10 +191,11 @@ PlasmaComponents.ItemDelegate {
     function positionPopup(popup) {
         var target = _popupParent()
         if (!target) return
-        var dx = delegate._menuOpenX - popup.width / 2
+        var pw = popup.implicitWidth || popup.width
+        var dx = delegate._menuOpenX - pw / 2
         var dy = delegate._menuOpenY + Kirigami.Units.gridUnit
-        dx = Math.max(0, Math.min(dx, target.width - popup.width))
-        var ph = popup.height || popup.implicitHeight || Kirigami.Units.gridUnit * 8
+        dx = Math.max(0, Math.min(dx, target.width - pw))
+        var ph = popup.implicitHeight || popup.height || Kirigami.Units.gridUnit * 8
         dy = Math.max(0, Math.min(dy, target.height - ph))
         popup.x = dx
         popup.y = dy
@@ -218,7 +219,7 @@ PlasmaComponents.ItemDelegate {
             if (delegate.isDragging) {
                 var currentY = mapToItem(delegate.listView, 0, mouse.y).y
                 delegate.dragOffsetY = currentY - delegate.startMouseY
-                var raw = Math.round((delegate.index * delegate.gridSize + delegate.dragOffsetY) / delegate.gridSize)
+                var raw = Math.round((delegate.startIndex * delegate.gridSize + delegate.dragOffsetY) / delegate.gridSize)
                 var clamped = Math.max(0, Math.min(raw, delegate.listView.count - 1))
                 delegate.targetIndex = clamped
                 delegate.dropTargetChanged(clamped)
