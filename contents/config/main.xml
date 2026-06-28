@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+    <kcfgfile name=""/>
+    <group name="General">
+        <entry name="tasksJson" type="String">
+            <label>Serialized task data (legacy; migrated to file on first run)</label>
+            <default>[]</default>
+        </entry>
+        <entry name="storagePath" type="String">
+            <label>Absolute path to the tasks JSON file</label>
+            <default></default>
+        </entry>
+        <entry name="migratedToFile" type="Bool">
+            <label>Whether tasks have been migrated from plasmoid config to file storage</label>
+            <default>false</default>
+        </entry>
+        <entry name="defaultPriority" type="Int">
+            <label>Default priority for new tasks (0=Low, 1=Medium, 2=High)</label>
+            <default>0</default>
+        </entry>
+        <entry name="showPriority" type="Bool">
+            <label>Show color stripe on the left edge of each task to indicate priority</label>
+            <default>true</default>
+        </entry>
+        <entry name="addToTop" type="Bool">
+            <label>Insert new tasks at the top of the list instead of the bottom</label>
+            <default>false</default>
+        </entry>
+        <entry name="hideCompleted" type="Bool">
+            <label>Whether to hide completed tasks from the list</label>
+            <default>false</default>
+        </entry>
+        <entry name="verboseDates" type="Bool">
+            <label>Show due dates as Today/Tomorrow/Yesterday when near, otherwise always a numeric date</label>
+            <default>true</default>
+        </entry>
+        <entry name="syncEnabled" type="Bool">
+            <label>Poll the task file every 3 seconds to pick up changes from Syncthing or other sync tools</label>
+            <default>false</default>
+        </entry>
+        <entry name="managedCategories" type="String">
+            <label>JSON array of user-managed category names</label>
+            <default>["Work","Personal","Education"]</default>
+        </entry>
+        <entry name="markdownExport" type="Bool">
+            <label>Also write a Markdown mirror of tasks on every save</label>
+            <default>false</default>
+        </entry>
+        <entry name="markdownPath" type="String">
+            <label>Absolute path to the Markdown export file</label>
+            <default></default>
+        </entry>
+    </group>
+</kcfg>
