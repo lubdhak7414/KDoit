@@ -16,7 +16,7 @@ PlasmaComponents.ItemDelegate {
     required property var sublist
 
     property ListView listView: ListView.view
-    property real gridSize: 40
+    property real gridSize: Kirigami.Units.gridUnit * 2
     property bool matched: true
     property bool dragEnabled: true
     property bool isSublistItem: false
