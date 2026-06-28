@@ -33,8 +33,6 @@ PlasmoidItem {
     property bool _skipNextPoll: false
 
     function toggleSelect(index) {
-        if (isSublistView())
-            return
         var copy = Object.assign({}, selectedIndices)
         if (copy[index])
             delete copy[index]
@@ -45,8 +43,6 @@ PlasmoidItem {
     }
 
     function rangeSelect(index) {
-        if (isSublistView())
-            return
         if (_lastClickedIndex < 0) {
             toggleSelect(index)
             return
@@ -66,8 +62,6 @@ PlasmoidItem {
     }
 
     function selectOnly(index) {
-        if (isSublistView())
-            return
         var keys = Object.keys(selectedIndices)
         if (keys.length === 1 && parseInt(keys[0]) === index) {
             clearSelection()
@@ -89,27 +83,41 @@ PlasmoidItem {
     }
 
     function deleteSelected() {
-        if (isSublistView())
-            return
         var indices = Object.keys(selectedIndices).map(Number)
         if (indices.length === 0)
             return
         var removed = []
-        for (var i = 0; i < indices.length; i++) {
-            var idx = indices[i]
-            if (idx >= 0 && idx < currentModel.count) {
-                var t = currentModel.get(idx)
-                var subCopy = taskModel.normalizeSublist(t.sublist)
-                removed.push({ index: idx, task: {
-                    uuid: t.uuid,
-                    title: t.title, done: t.done, priority: t.priority,
-                    category: t.category, createdAt: t.createdAt,
-                    modifiedAt: t.modifiedAt,
-                    dueDate: t.dueDate, sublist: subCopy
-                }})
+        if (isSublistView()) {
+            indices.sort(function(a, b) { return b - a })
+            for (var i = 0; i < indices.length; i++) {
+                var idx = indices[i]
+                if (idx >= 0 && idx < sublistModel.count) {
+                    var st = sublistModel.get(idx)
+                    removed.push({ index: idx, task: {
+                        uuid: st.uuid, title: st.title, done: st.done,
+                        priority: 0, category: "", createdAt: "", dueDate: "", sublist: []
+                    }})
+                    sublistModel.remove(idx)
+                }
             }
+            syncSublist()
+        } else {
+            for (var i = 0; i < indices.length; i++) {
+                var idx = indices[i]
+                if (idx >= 0 && idx < currentModel.count) {
+                    var t = currentModel.get(idx)
+                    var subCopy = taskModel.normalizeSublist(t.sublist)
+                    removed.push({ index: idx, task: {
+                        uuid: t.uuid,
+                        title: t.title, done: t.done, priority: t.priority,
+                        category: t.category, createdAt: t.createdAt,
+                        modifiedAt: t.modifiedAt,
+                        dueDate: t.dueDate, sublist: subCopy
+                    }})
+                }
+            }
+            currentModel.removeTasks(indices)
         }
-        currentModel.removeTasks(indices)
         clearSelection()
         _updateTrigger++
         updateDistinctCategories()
@@ -167,6 +175,10 @@ PlasmoidItem {
             disconnectSource(source)
             if (root._skipNextPoll) {
                 root._skipNextPoll = false
+                // Record the current mtime so the next poll doesn't treat it as
+                // a stale-vs-new mismatch and trigger a redundant file read.
+                if (data["exit code"] === 0)
+                    root._lastMtime = data.stdout.trim()
                 return
             }
             if (data["exit code"] === 0) {
@@ -221,6 +233,12 @@ PlasmoidItem {
             root._updateTrigger++
             root.dismissUndo()
             root.clearSelection()
+            // Abort any in-progress drag whose delegates may have been destroyed
+            // by the model change, preventing the ListView from staying frozen
+            // (interactive: !currentDragActive would remain false).
+            taskList.currentDragActive = false
+            taskList.dragSourceIndex = -1
+            taskList.dropTargetIndex = -1
             // If the user is viewing a sublist, refresh it from the updated task model
             // so remote sublist changes don't get overwritten by the stale snapshot.
             // Use UUID lookup -deletion propagation may have shifted model indices.
@@ -806,10 +824,30 @@ PlasmoidItem {
                     display: PlasmaComponents.AbstractButton.IconOnly
                     visible: !root.isSublistView() && root.selectedCount() === 0
                     onClicked: {
+                        // Capture completed tasks before removal so they can be undone
+                        var removed = []
+                        for (var i = taskModel.count - 1; i >= 0; i--) {
+                            var t = taskModel.get(i)
+                            if (t.done === true) {
+                                var subCopy = taskModel.normalizeSublist(t.sublist)
+                                removed.push({ index: i, task: {
+                                    uuid: t.uuid,
+                                    title: t.title, done: t.done, priority: t.priority,
+                                    category: t.category, createdAt: t.createdAt,
+                                    modifiedAt: t.modifiedAt,
+                                    dueDate: t.dueDate, sublist: subCopy
+                                }})
+                            }
+                        }
                         taskModel.deleteCompleted()
                         root.clearSelection()
                         root._updateTrigger++
                         root.updateDistinctCategories()
+                        if (removed.length > 0) {
+                            lastDeleted = { type: "multi", items: removed }
+                            undoTimer.restart()
+                            _undoVisible = true
+                        }
                     }
                     Controls.ToolTip {
                         text: i18n("Delete Completed")
