@@ -23,6 +23,16 @@ ListModel {
         var bytes = []
         for (var i = 0; i < str.length; i++) {
             var c = str.charCodeAt(i)
+            // Combine surrogate pairs into a single code point before UTF-8 encoding.
+            // charCodeAt returns individual UTF-16 units; without this, non-BMP chars
+            // (emoji, U+10000+) each surrogate gets encoded as 3 bytes → invalid UTF-8.
+            if (c >= 0xD800 && c <= 0xDBFF && i + 1 < str.length) {
+                var next = str.charCodeAt(i + 1)
+                if (next >= 0xDC00 && next <= 0xDFFF) {
+                    c = 0x10000 + ((c - 0xD800) << 10) + (next - 0xDC00)
+                    i++
+                }
+            }
             if (c < 0x80) {
                 bytes.push(c)
             } else if (c < 0x800) {
