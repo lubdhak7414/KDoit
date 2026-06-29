@@ -180,7 +180,7 @@ ListModel {
                 var inc = normalizeTask(incoming[j])
                 // Treat a missing modifiedAt as epoch so external-tool tasks without
                 // a timestamp never silently overwrite locally-modified data.
-                if (incoming[j].modifiedAt === undefined) inc.modifiedAt = "1970-01-01T00:00:00.000Z"
+                if (!incoming[j].modifiedAt) inc.modifiedAt = "1970-01-01T00:00:00.000Z"
                 var idx = currentByUuid[inc.uuid]
                 if (idx !== undefined) {
                     // Task exists locally — update in-place if incoming is newer
