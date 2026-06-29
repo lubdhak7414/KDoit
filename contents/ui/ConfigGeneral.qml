@@ -30,9 +30,14 @@ Kirigami.Page {
     property bool cfg_markdownExportDefault: false
     property string cfg_markdownPath
     property string cfg_markdownPathDefault: ""
+    property bool cfg_enableIcsExport
+    property bool cfg_enableIcsExportDefault: false
+    property string cfg_listTitle
+    property string cfg_listTitleDefault: "K Do it!"
     property var _parsedManagedCategories: {
         try {
-            return JSON.parse(root.cfg_managedCategories || '["Work","Personal","Education"]')
+            var v = JSON.parse(root.cfg_managedCategories || '["Work","Personal","Education"]')
+            return Array.isArray(v) ? v : ["Work", "Personal", "Education"]
         } catch(e) {
             return ["Work", "Personal", "Education"]
         }
@@ -44,10 +49,23 @@ Kirigami.Page {
         anchors.fill: parent
 
         PlasmaComponents.TextField {
+            id: titleField
+            Kirigami.FormData.label: i18n("Widget title:")
+            implicitWidth: Kirigami.Units.gridUnit * 20
+            placeholderText: i18n("My To-Do List")
+            Component.onCompleted: text = root.cfg_listTitle
+            onEditingFinished: root.cfg_listTitle = text.trim() || root.cfg_listTitleDefault
+        }
+
+        Kirigami.Separator {
+            Kirigami.FormData.isSection: true
+        }
+
+        PlasmaComponents.TextField {
             id: pathField
             Kirigami.FormData.label: i18n("Tasks file:")
             implicitWidth: Kirigami.Units.gridUnit * 20
-            placeholderText: i18n("e.g. /home/user/.local/share/kdoit/tasks.json")
+            placeholderText: i18n("Leave empty for local storage")
             Component.onCompleted: text = root.cfg_storagePath
             onEditingFinished: {
                 var v = text.trim()
@@ -126,7 +144,7 @@ Kirigami.Page {
 
         PlasmaComponents.Label {
             Kirigami.FormData.label: ""
-            text: i18n("Polls the task file every 3 seconds to pick up changes from Syncthing or other sync tools. Disable on single-machine setups to save resources.")
+            text: i18n("Check for external changes every 3 seconds (e.g. Syncthing, shared folder). Turn off on a single machine to save resources.")
             font.pointSize: Kirigami.Theme.smallFont.pointSize
             color: Kirigami.Theme.disabledTextColor
             wrapMode: Text.WordWrap
@@ -149,7 +167,7 @@ Kirigami.Page {
             Kirigami.FormData.label: i18n("Markdown file:")
             implicitWidth: Kirigami.Units.gridUnit * 20
             visible: root.cfg_markdownExport
-            placeholderText: i18n("e.g. /home/user/.local/share/kdoit/tasks.md")
+            placeholderText: i18n("Leave empty to save next to JSON file")
             Component.onCompleted: text = root.cfg_markdownPath
             onEditingFinished: {
                 var v = text.trim()
@@ -163,7 +181,24 @@ Kirigami.Page {
         PlasmaComponents.Label {
             Kirigami.FormData.label: ""
             visible: root.cfg_markdownExport
-            text: i18n("Leave blank to write next to the tasks JSON file. Uses Obsidian Tasks plugin syntax (checkboxes, due dates, priorities, categories).")
+            text: i18n("Uses Obsidian Tasks syntax (checkboxes, dates, priorities, categories). Leave empty to save next to the JSON file.")
+            font.pointSize: Kirigami.Theme.smallFont.pointSize
+            color: Kirigami.Theme.disabledTextColor
+            wrapMode: Text.WordWrap
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 20
+        }
+
+        PlasmaComponents.CheckBox {
+            Kirigami.FormData.label: i18n("iCalendar export:")
+            text: i18n("Export tasks to .ics calendar file")
+            Binding on checked { value: root.cfg_enableIcsExport }
+            onToggled: root.cfg_enableIcsExport = checked
+        }
+
+        PlasmaComponents.Label {
+            Kirigami.FormData.label: ""
+            visible: root.cfg_enableIcsExport
+            text: i18n("Writes a .ics file with VTODO components alongside the JSON file. Calendar apps can subscribe to it for due-date reminders.")
             font.pointSize: Kirigami.Theme.smallFont.pointSize
             color: Kirigami.Theme.disabledTextColor
             wrapMode: Text.WordWrap
@@ -194,10 +229,13 @@ Kirigami.Page {
                     implicitWidth: Kirigami.Units.gridUnit * 1.6
                     implicitHeight: Kirigami.Units.gridUnit * 1.6
                     onClicked: {
-                        var cats = JSON.parse(root.cfg_managedCategories || '[]')
+                        var cats
+                        try { cats = JSON.parse(root.cfg_managedCategories || '[]') }
+                        catch(e) { cats = [] }
+                        if (!Array.isArray(cats)) cats = []
                         var lower = modelData.toLowerCase()
                         for (var i = cats.length - 1; i >= 0; i--) {
-                            if (cats[i].toLowerCase() === lower) { cats.splice(i, 1); break }
+                            if (typeof cats[i] === "string" && cats[i].toLowerCase() === lower) { cats.splice(i, 1); break }
                         }
                         root.cfg_managedCategories = JSON.stringify(cats)
                     }
@@ -223,10 +261,13 @@ Kirigami.Page {
                 onClicked: {
                     var name = newCategoryField.text.trim()
                     if (name === "") return
-                    var cats = JSON.parse(root.cfg_managedCategories || '[]')
+                    var cats
+                    try { cats = JSON.parse(root.cfg_managedCategories || '[]') }
+                    catch(e) { cats = [] }
+                    if (!Array.isArray(cats)) cats = []
                     var lower = name.toLowerCase()
                     for (var i = 0; i < cats.length; i++) {
-                        if (cats[i].toLowerCase() === lower) { newCategoryField.text = ""; return }
+                        if (typeof cats[i] === "string" && cats[i].toLowerCase() === lower) { newCategoryField.text = ""; return }
                     }
                     cats.push(name)
                     root.cfg_managedCategories = JSON.stringify(cats)

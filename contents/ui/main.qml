@@ -12,11 +12,10 @@ PlasmoidItem {
 
     property var navigationStack: []
     property var currentModel: taskModel
-    property string currentTitle: i18n("My Tasks")
+    property string currentTitle: plasmoid.configuration.listTitle || i18n("K Do it!")
     property string searchText: ""
     property bool searchActive: false
     property var lastDeleted: null
-    property var activeSublistTask: null
     property int _updateTrigger: 0
 
     property string categoryFilter: ""
@@ -31,10 +30,9 @@ PlasmoidItem {
     property string _lastMtime: "0"
     property string _activeSublistUuid: ""
     property bool _undoVisible: false
+    property bool _skipNextPoll: false
 
     function toggleSelect(index) {
-        if (isSublistView())
-            return
         var copy = Object.assign({}, selectedIndices)
         if (copy[index])
             delete copy[index]
@@ -45,8 +43,6 @@ PlasmoidItem {
     }
 
     function rangeSelect(index) {
-        if (isSublistView())
-            return
         if (_lastClickedIndex < 0) {
             toggleSelect(index)
             return
@@ -66,8 +62,6 @@ PlasmoidItem {
     }
 
     function selectOnly(index) {
-        if (isSublistView())
-            return
         var keys = Object.keys(selectedIndices)
         if (keys.length === 1 && parseInt(keys[0]) === index) {
             clearSelection()
@@ -89,31 +83,45 @@ PlasmoidItem {
     }
 
     function deleteSelected() {
-        if (isSublistView())
-            return
         var indices = Object.keys(selectedIndices).map(Number)
         if (indices.length === 0)
             return
         var removed = []
-        for (var i = 0; i < indices.length; i++) {
-            var idx = indices[i]
-            if (idx >= 0 && idx < currentModel.count) {
-                var t = currentModel.get(idx)
-                var subCopy = taskModel.normalizeSublist(t.sublist)
-                removed.push({ index: idx, task: {
-                    uuid: t.uuid,
-                    title: t.title, done: t.done, priority: t.priority,
-                    category: t.category, createdAt: t.createdAt,
-                    modifiedAt: t.modifiedAt,
-                    dueDate: t.dueDate, sublist: subCopy
-                }})
+        if (isSublistView()) {
+            indices.sort(function(a, b) { return b - a })
+            for (var i = 0; i < indices.length; i++) {
+                var idx = indices[i]
+                if (idx >= 0 && idx < sublistModel.count) {
+                    var st = sublistModel.get(idx)
+                    removed.push({ index: idx, task: {
+                        uuid: st.uuid, title: st.title, done: st.done,
+                        priority: 0, category: "", createdAt: "", dueDate: "", sublist: []
+                    }})
+                    sublistModel.remove(idx)
+                }
             }
+            syncSublist()
+        } else {
+            for (var i = 0; i < indices.length; i++) {
+                var idx = indices[i]
+                if (idx >= 0 && idx < currentModel.count) {
+                    var t = currentModel.get(idx)
+                    var subCopy = taskModel.normalizeSublist(t.sublist)
+                    removed.push({ index: idx, task: {
+                        uuid: t.uuid,
+                        title: t.title, done: t.done, priority: t.priority,
+                        category: t.category, createdAt: t.createdAt,
+                        modifiedAt: t.modifiedAt,
+                        dueDate: t.dueDate, sublist: subCopy
+                    }})
+                }
+            }
+            currentModel.removeTasks(indices)
         }
-        currentModel.removeTasks(indices)
         clearSelection()
         _updateTrigger++
         updateDistinctCategories()
-        lastDeleted = { type: "multi", items: removed }
+        lastDeleted = { type: isSublistView() ? "multi-sublist" : "multi", items: removed }
         undoTimer.restart()
         _undoVisible = true
     }
@@ -154,8 +162,7 @@ PlasmoidItem {
         connectedSources: []
         onNewData: function(source, data) {
             disconnectSource(source)
-            if (data["exit code"] === 0)
-                taskModel.loadFromShell(data.stdout)
+            taskModel.loadFromShell(data["exit code"] === 0 ? data.stdout : "")
         }
         function run(path) { connectSource("cat '" + path.replace(/'/g, "'\\''") + "'") }
     }
@@ -166,6 +173,20 @@ PlasmoidItem {
         connectedSources: []
         onNewData: function(source, data) {
             disconnectSource(source)
+            if (root._skipNextPoll) {
+                root._skipNextPoll = false
+                if (data["exit code"] === 0) {
+                    var mtime = data.stdout.trim()
+                    if (mtime === root._lastMtime) {
+                        // Our own save — skip the redundant read.
+                        return
+                    }
+                    // Different mtime — another writer was active, fall through
+                    // to read the remote changes.
+                } else {
+                    return
+                }
+            }
             if (data["exit code"] === 0) {
                 var mtime = data.stdout.trim()
                 if (mtime !== root._lastMtime) {
@@ -176,6 +197,26 @@ PlasmoidItem {
             }
         }
         function check(path) { connectSource("stat -c %Y '" + path.replace(/'/g, "'\\''") + "'") }
+    }
+
+    Plasma5Support.DataSource {
+        id: mdReader
+        engine: "executable"
+        connectedSources: []
+        onNewData: function(source, data) {
+            disconnectSource(source)
+            if (data["exit code"] === 0) {
+                var result = taskModel.importFromMarkdown(data.stdout)
+                if (result.imported > 0 || result.updated > 0) {
+                    root._updateTrigger++
+                    root.updateDistinctCategories()
+                    root._skipNextPoll = true
+                }
+            } else {
+                console.warn("KDoit markdown import: file read failed")
+            }
+        }
+        function run(path) { connectSource("cat '" + path.replace(/'/g, "'\\''") + "'") }
     }
 
     Timer {
@@ -197,9 +238,16 @@ PlasmoidItem {
             root.updateDistinctCategories()
             root._updateTrigger++
             root.dismissUndo()
+            root.clearSelection()
+            // Abort any in-progress drag whose delegates may have been destroyed
+            // by the model change, preventing the ListView from staying frozen
+            // (interactive: !currentDragActive would remain false).
+            taskList.currentDragActive = false
+            taskList.dragSourceIndex = -1
+            taskList.dropTargetIndex = -1
             // If the user is viewing a sublist, refresh it from the updated task model
             // so remote sublist changes don't get overwritten by the stale snapshot.
-            // Use UUID lookup — deletion propagation may have shifted model indices.
+            // Use UUID lookup -deletion propagation may have shifted model indices.
             if (root.isSublistView() && root._activeSublistUuid !== "") {
                 var newIdx = -1
                 for (var n = 0; n < taskModel.count; n++) {
@@ -208,8 +256,8 @@ PlasmoidItem {
                 if (newIdx < 0) {
                     root.goBack()
                 } else {
-                    root.activeSublistTask = newIdx
                     var task = taskModel.get(newIdx)
+                    root.currentTitle = task.title
                     var sub = taskModel.normalizeSublist(task.sublist)
                     sublistModel.clear()
                     for (var i = 0; i < sub.length; i++)
@@ -224,6 +272,10 @@ PlasmoidItem {
         target: plasmoid.configuration
         function onManagedCategoriesChanged() {
             root._onManagedCategoriesChanged()
+        }
+        function onListTitleChanged() {
+            if (!root.isSublistView())
+                root.currentTitle = plasmoid.configuration.listTitle || i18n("K Do it!")
         }
     }
 
@@ -247,13 +299,12 @@ PlasmoidItem {
     function syncSublist() {
         if (_activeSublistUuid === "")
             return
-        // Re-derive the index by UUID — remote deletions may have shifted indices.
+        // Re-derive the index by UUID -remote deletions may have shifted indices.
         var syncIdx = -1
         for (var n = 0; n < taskModel.count; n++) {
             if (taskModel.get(n).uuid === _activeSublistUuid) { syncIdx = n; break }
         }
         if (syncIdx < 0) return
-        activeSublistTask = syncIdx
         var arr = []
         for (var i = 0; i < sublistModel.count; i++) {
             var t = sublistModel.get(i)
@@ -277,7 +328,6 @@ PlasmoidItem {
         navigationStackChanged()
         categoryFilter = ""
         var task = taskModel.get(taskIndex)
-        activeSublistTask = taskIndex
         _activeSublistUuid = task.uuid
         sublistModel.clear()
         var sub = taskModel.normalizeSublist(task.sublist)
@@ -294,7 +344,6 @@ PlasmoidItem {
         clearSelection()
         var entry = navigationStack.pop()
         navigationStackChanged()
-        activeSublistTask = null
         _activeSublistUuid = ""
         currentModel = taskModel
         currentTitle = entry.title
@@ -311,6 +360,7 @@ PlasmoidItem {
                 sublistModel.insert(0, makeSublistRow(taskModel.newUuid(), title, false))
             else
                 sublistModel.append(makeSublistRow(taskModel.newUuid(), title, false))
+            _updateTrigger++
             syncSublist()
         } else {
             taskModel.addTask(title, plasmoid.configuration.defaultPriority, plasmoid.configuration.addToTop)
@@ -321,8 +371,9 @@ PlasmoidItem {
         if (isSublistView()) {
             var st = sublistModel.get(index)
             lastDeleted = {
+                type: "single-sublist",
                 index: index,
-                task: { uuid: st.uuid, title: st.title, done: st.done, priority: 0, category: "", createdAt: "", dueDate: "", sublist: [] }
+                task: { uuid: st.uuid, title: st.title, done: st.done }
             }
             sublistModel.remove(index)
             syncSublist()
@@ -351,16 +402,34 @@ PlasmoidItem {
     function undoDelete() {
         if (lastDeleted === null)
             return
-        if (lastDeleted.type === "multi") {
+        if (lastDeleted.type === "multi-sublist") {
             var items = lastDeleted.items.slice().sort(function(a, b) { return a.index - b.index })
             for (var i = 0; i < items.length; i++) {
-                taskModel.insertTask(items[i].index, items[i].task)
+                var st = items[i].task
+                var clamped = Math.max(0, Math.min(items[i].index, sublistModel.count))
+                sublistModel.insert(clamped,
+                    makeSublistRow(st.uuid || taskModel.newUuid(), st.title, st.done))
             }
-        } else if (isSublistView()) {
+            syncSublist()
+        } else if (lastDeleted.type === "single-sublist") {
             sublistModel.insert(Math.min(lastDeleted.index, sublistModel.count),
                 makeSublistRow(lastDeleted.task.uuid || taskModel.newUuid(), lastDeleted.task.title, lastDeleted.task.done))
             syncSublist()
-        } else {
+        } else if (lastDeleted.type === "multi") {
+            var items = lastDeleted.items.slice().sort(function(a, b) { return a.index - b.index })
+            for (var i = 0; i < items.length; i++) {
+                var t = items[i].task
+                var nt = taskModel.normalizeTask(t)
+                var clamped = Math.max(0, Math.min(items[i].index, taskModel.count))
+                taskModel.insert(clamped, {
+                    uuid: nt.uuid, title: nt.title, done: nt.done,
+                    priority: nt.priority, category: nt.category,
+                    createdAt: nt.createdAt, modifiedAt: nt.modifiedAt,
+                    dueDate: nt.dueDate, sublist: taskModel.normalizeSublist(nt.sublist)
+                })
+            }
+            taskModel.save()
+        } else if (!lastDeleted.type) {
             taskModel.insertTask(lastDeleted.index, lastDeleted.task)
         }
         lastDeleted = null
@@ -444,7 +513,9 @@ PlasmoidItem {
 
     function _parseManagedCategories() {
         try {
-            return JSON.parse(plasmoid.configuration.managedCategories || '["Work","Personal","Education"]')
+            var parsed = JSON.parse(plasmoid.configuration.managedCategories || '["Work","Personal","Education"]')
+            if (!Array.isArray(parsed)) return ["Work", "Personal", "Education"]
+            return parsed.filter(function(x) { return typeof x === "string" })
         } catch(e) {
             return ["Work", "Personal", "Education"]
         }
@@ -459,15 +530,6 @@ PlasmoidItem {
             if (cats[i].toLowerCase() === lower) return
         }
         cats.push(name)
-        plasmoid.configuration.managedCategories = JSON.stringify(cats)
-    }
-
-    function removeManagedCategory(name) {
-        var cats = _parseManagedCategories()
-        var lower = name.toLowerCase()
-        for (var i = cats.length - 1; i >= 0; i--) {
-            if (cats[i].toLowerCase() === lower) { cats.splice(i, 1); break }
-        }
         plasmoid.configuration.managedCategories = JSON.stringify(cats)
     }
 
@@ -558,10 +620,12 @@ PlasmoidItem {
                     visible: root.distinctCategories.length > 0 && !root.isSublistView()
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 6
                     model: [i18n("All")].concat(root.distinctCategories)
-                    currentIndex: {
-                        if (root.categoryFilter === "") return 0
-                        var idx = root.distinctCategories.indexOf(root.categoryFilter)
-                        return idx >= 0 ? idx + 1 : 0
+                    Binding on currentIndex {
+                        value: {
+                            if (root.categoryFilter === "") return 0
+                            var idx = root.distinctCategories.indexOf(root.categoryFilter)
+                            return idx >= 0 ? idx + 1 : 0
+                        }
                     }
                     onActivated: function(index) {
                         if (index === 0)
@@ -576,6 +640,7 @@ PlasmoidItem {
                     flat: true
                     display: PlasmaComponents.AbstractButton.IconOnly
                     text: i18n("Sort")
+                    visible: !root.isSublistView()
                     onClicked: sortMenu.popup()
 
                     Controls.Menu {
@@ -605,17 +670,28 @@ PlasmoidItem {
                 }
 
                 PlasmaComponents.Button {
-                    icon.name: "search-symbolic"
+                    icon.name: "view-filter-symbolic"
                     flat: true
                     checkable: true
                     display: PlasmaComponents.AbstractButton.IconOnly
-                    text: i18n("Search")
-                    checked: root.searchActive
+                    text: i18n("Filter")
+                    Binding on checked {
+                        value: root.searchActive
+                    }
                     onToggled: {
                         root.searchActive = checked
                         if (!checked)
                             searchField.text = ""
                     }
+                }
+
+                PlasmaComponents.Button {
+                    icon.name: "document-import-symbolic"
+                    flat: true
+                    display: PlasmaComponents.AbstractButton.IconOnly
+                    text: i18n("Import from Markdown")
+                    visible: plasmoid.configuration.markdownExport && !root.isSublistView()
+                    onClicked: importDialog.open()
                 }
             }
 
@@ -623,7 +699,7 @@ PlasmoidItem {
                 id: searchField
                 Layout.fillWidth: true
                 visible: root.searchActive
-                placeholderText: i18n("Search tasks...")
+                placeholderText: i18n("Filter tasks...")
                 onTextChanged: root.searchText = text
                 Keys.onEscapePressed: {
                     text = ""
@@ -708,11 +784,11 @@ PlasmoidItem {
                 visible: root.visibleCount === 0
                 message: root.currentModel.count > 0
                     ? (root.searchText.length > 0 || root.categoryFilter !== ""
-                        ? i18n("No matching tasks")
-                        : i18n("All tasks completed"))
-                    : i18n("No tasks yet")
+                        ? i18n("No tasks match your search")
+                        : i18n("All done! Nice work."))
+                    : i18n("Add your first task below")
                 iconSource: root.currentModel.count > 0 && (root.searchText.length > 0 || root.categoryFilter !== "")
-                    ? "search-symbolic"
+                    ? "view-filter-symbolic"
                     : "view-task"
             }
 
@@ -720,7 +796,9 @@ PlasmoidItem {
                 id: undoMessage
                 Layout.fillWidth: true
                 visible: root._undoVisible
-                text: i18n("Task deleted")
+                text: root.lastDeleted && (root.lastDeleted.type === "multi" || root.lastDeleted.type === "multi-sublist")
+                      ? i18np("1 task removed", "%1 tasks removed", root.lastDeleted.items.length)
+                      : i18n("Task removed")
                 type: Kirigami.MessageType.Information
                 actions: [
                     Kirigami.Action {
@@ -760,21 +838,65 @@ PlasmoidItem {
 
                 PlasmaComponents.Button {
                     icon.name: "edit-clear-history-symbolic"
-                    icon.color: Kirigami.Theme.highlightColor
                     flat: true
                     display: PlasmaComponents.AbstractButton.IconOnly
                     visible: !root.isSublistView() && root.selectedCount() === 0
                     onClicked: {
+                        // Capture completed tasks before removal so they can be undone
+                        var removed = []
+                        for (var i = taskModel.count - 1; i >= 0; i--) {
+                            var t = taskModel.get(i)
+                            if (t.done === true) {
+                                var subCopy = taskModel.normalizeSublist(t.sublist)
+                                removed.push({ index: i, task: {
+                                    uuid: t.uuid,
+                                    title: t.title, done: t.done, priority: t.priority,
+                                    category: t.category, createdAt: t.createdAt,
+                                    modifiedAt: t.modifiedAt,
+                                    dueDate: t.dueDate, sublist: subCopy
+                                }})
+                            }
+                        }
                         taskModel.deleteCompleted()
                         root.clearSelection()
                         root._updateTrigger++
                         root.updateDistinctCategories()
+                        if (removed.length > 0) {
+                            lastDeleted = { type: "multi", items: removed }
+                            undoTimer.restart()
+                            _undoVisible = true
+                        }
                     }
                     Controls.ToolTip {
                         text: i18n("Delete Completed")
                         delay: Kirigami.Units.toolTipDelay
                     }
                 }
+            }
+        }
+
+        Kirigami.Dialog {
+            id: importDialog
+            title: i18n("Import from Markdown")
+            standardButtons: Kirigami.Dialog.Ok | Kirigami.Dialog.Cancel
+            onAccepted: {
+                var mdPath = plasmoid.configuration.markdownPath
+                if (mdPath === "") {
+                    mdPath = plasmoid.configuration.storagePath.replace(/\.json$/, ".md")
+                    if (mdPath === plasmoid.configuration.storagePath) mdPath = plasmoid.configuration.storagePath + ".md"
+                }
+                mdReader.run(mdPath)
+            }
+            PlasmaComponents.Label {
+                text: {
+                    var p = plasmoid.configuration.markdownPath
+                    if (p === "") {
+                        p = plasmoid.configuration.storagePath.replace(/\.json$/, ".md")
+                        if (p === plasmoid.configuration.storagePath) p = plasmoid.configuration.storagePath + ".md"
+                    }
+                    return p
+                }
+                wrapMode: Text.WrapAnywhere
             }
         }
     }

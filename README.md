@@ -1,57 +1,91 @@
 # KDoit
 
-A to-do list widget for KDE Plasma 6 with nested sub-tasks, priorities, and due dates.
+A to-do list widget for KDE Plasma 6. Pure QML, no build step.
 
-Set priorities with color coding, assign due dates that highlight when overdue, and nest sub-lists to break down complex work. Reorder by drag-and-drop, filter with search, and hide completed tasks. Tasks persist to a JSON file and sync live across machines via Syncthing or any file-sync tool.
+Nested sublists, priorities, due dates, categories, drag-and-drop reorder, live file sync, Markdown export (Obsidian Tasks compatible), and iCalendar export for calendar apps.
 
-## Installation
+![KDoit task list](assets/preview1.png) ![KDoit with categories](assets/preview2.png)
+
+## Why KDoit
+
+- **No build step** — clone and install in under a minute; no cmake, no npm
+- **Your data** — tasks live in `~/.local/share/kdoit/tasks.json`; no account, no cloud
+- **Sync your way** — works with Syncthing, Nextcloud, or any file sync tool
+- **iCalendar export** — subscribe to due-date reminders in any calendar app
+- **Obsidian bridge** — Markdown export is compatible with the Obsidian Tasks plugin
+- **Plasma 6 native** — Kirigami theme colors, no hardcoded values
+
+## Install
 
 ```bash
 git clone https://github.com/lubdhak7414/KDoit.git
-rsync -av --exclude='.git' KDoit/ ~/.local/share/plasma/plasmoids/com.github.lubdhak7414.kdoit/
-plasmashell --replace
+kpackagetool6 -t Plasma/Applet -i KDoit/
 ```
 
-Then add the widget via the panel's "Add Widgets" menu. Requires Plasma 6, Qt 6, and Kirigami 6 (Wayland and X11).
+Then right-click the desktop → Add Widgets → search "KDoit".
+
+Requires KDE Plasma 6 (Kirigami and Qt 6 are included in any standard Plasma 6 install). Works on Wayland and X11.
 
 ## Features
 
-- **Priorities** — low / medium / high with theme-aware color-coded left stripe
-- **Due dates** — with overdue and today highlighting
-- **Categories** — filterable via header ComboBox, monochrome `#tag` display
-- **Nested sub-lists** — drill in and back, with a done/total badge
-- **Drag-and-drop reordering** — full-row drag, disabled while filtering or in a sub-list
-- **Multi-select** — Ctrl+click toggle, Shift+click range-select, bulk delete
-- **Search** — toggleable filter by title
-- **Hide completed** — configurable toggle
-- **Undo on delete** — 5-second window
-- **Live sync** — polls the task file every 3 seconds; merges changes by UUID (newer `modifiedAt` wins), propagates remote deletions, and refreshes open sublist views in place
-- **Internationalization** — `i18n()` throughout (translators welcome)
+**Task management**
+- Priorities: high / medium / low with a color-coded stripe
+- Due dates — today and overdue tasks are highlighted
+- Categories — filter via the header dropdown
+- Nested sublists — one level deep; click the count badge to enter
+- Drag-and-drop reorder (disabled while filtering or inside a sublist)
+- Multi-select: Ctrl+click toggle, Shift+click range, bulk delete
+- Undo on delete — 5-second window
+- Right-click any task for rename, date, category, priority
+
+**Data and sync**
+- Dual-write: JSON file + KConfig mirror for instant startup
+- Live sync: polls the file every 3 s and merges by UUID (newer `modifiedAt` wins); propagates remote deletions
+
+**Export**
+- **Markdown** — checkbox format with UUID and metadata comments; compatible with the Obsidian Tasks plugin
+- **iCalendar** — `.ics` file with RFC 5545 VTODO components; subtasks linked via `RELATED-TO`
 
 ## Configuration
 
 Right-click the widget → Configure:
 
-- **Tasks file path** — where the JSON file is stored (default `~/.local/share/kdoit/tasks.json`); point multiple machines at the same Syncthing folder to sync tasks across them
-- **Default Priority** — priority assigned to new tasks
-- **Hide Completed** — collapse finished tasks from view
-- **Enable live sync** — polls the task file every 3 seconds for external changes; off by default, enable only when sharing the file across machines
+| Setting | Default | Notes |
+|---------|---------|-------|
+| Storage path | `~/.local/share/kdoit/tasks.json` | Point multiple machines at the same synced folder |
+| Default priority | Medium | Priority assigned to new tasks |
+| Hide completed | Off | Collapses done tasks from view |
+| Add to top | Off | Inserts new tasks at the top instead of the bottom |
+| Live sync | Off | Enable only when sharing the file across machines |
+| Markdown export | Off | Writes a `.md` file alongside the JSON |
+| iCalendar export | Off | Writes a `.ics` file alongside the JSON |
 
-## Notes
+## Sync across machines
 
-- Live sync is **disabled by default**. Enable it in Configure only if you share the task file across machines (e.g. via Syncthing). Leaving it on when not needed polls disk every 3 seconds unnecessarily.
-- File write uses standard GNU coreutils (`base64`, `stat`, `mv`, `printf`). These are present on any standard Linux system but may be absent in locked-down container or Flatpak environments.
-- The tasks file path must not contain single-quote (`'`) characters — the path is passed to the shell unescaped in that position.
+Point all machines at the same file via Syncthing (or any sync tool) and enable **Live sync** in Configure. The 3-second poll picks up remote writes; UUID-based merge applies the newer version of each task and propagates deletions.
 
-## Known Limitations
+## iCalendar export
 
-- Sub-lists are flat (one level of nesting)
-- No tombstones — a task deleted on one machine can be re-added if the remote file still contains it with a newer `modifiedAt`
+When enabled, KDoit writes `tasks.ics` next to `tasks.json`. Only tasks with due dates are exported. Import it into Thunderbird, GNOME Calendar, or subscribe via any CalDAV client for due-date reminders.
+
+## FAQ
+
+**Does it work on X11 and Wayland?**
+Yes.
+
+**Can I use KDoit without a KDE desktop?**
+No — it's a Plasma plasmoid and requires KDE Plasma 6.
+
+**Does it sync with Todoist, Notion, or other cloud apps?**
+Not directly. It writes a standard JSON file you can sync with any tool. The iCalendar export works with any CalDAV-compatible app.
+
+**Is there a Flatpak or Snap?**
+No. Plasmoids install via `kpackagetool6` and run inside the Plasma shell.
 
 ## Contributing
 
-Pure QML, no build step. See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions, the dev/reload workflow, project layout, and data format.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-Licensed under the GNU General Public License v3.0 — see [LICENSE](LICENSE).
+GPL v3 — see [LICENSE](LICENSE).

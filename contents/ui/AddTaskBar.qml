@@ -21,7 +21,7 @@ RowLayout {
     PlasmaComponents.TextField {
         id: field
         Layout.fillWidth: true
-        placeholderText: i18n("Add a task...")
+        placeholderText: i18n("New task...")
         onAccepted: root.commit()
         Keys.onEscapePressed: field.text = ""
     }

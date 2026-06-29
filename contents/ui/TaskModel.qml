@@ -1,5 +1,5 @@
 import QtQuick
-import Qt.labs.platform as Platform
+import QtCore
 import org.kde.plasma.plasmoid
 
 ListModel {
@@ -20,25 +20,7 @@ ListModel {
 
     function _base64(str) {
         var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
-        var bytes = []
-        for (var i = 0; i < str.length; i++) {
-            var c = str.charCodeAt(i)
-            if (c < 0x80) {
-                bytes.push(c)
-            } else if (c < 0x800) {
-                bytes.push(0xC0 | (c >> 6))
-                bytes.push(0x80 | (c & 0x3F))
-            } else if (c < 0x10000) {
-                bytes.push(0xE0 | (c >> 12))
-                bytes.push(0x80 | ((c >> 6) & 0x3F))
-                bytes.push(0x80 | (c & 0x3F))
-            } else {
-                bytes.push(0xF0 | (c >> 18))
-                bytes.push(0x80 | ((c >> 12) & 0x3F))
-                bytes.push(0x80 | ((c >> 6) & 0x3F))
-                bytes.push(0x80 | (c & 0x3F))
-            }
-        }
+        var bytes = _toUtf8Bytes(str)
         var result = ""
         for (var j = 0; j < bytes.length; j += 3) {
             var b0 = bytes[j]
@@ -63,14 +45,14 @@ ListModel {
 
     function normalizeTask(t) {
         return {
-            uuid: (t.uuid !== undefined && t.uuid !== "") ? t.uuid : newUuid(),
-            title: t.title !== undefined ? t.title : "",
+            uuid: (t.uuid != null && t.uuid !== "") ? t.uuid : newUuid(),
+            title: t.title != null ? t.title : "",
             done: t.done === true,
-            priority: t.priority !== undefined ? t.priority : 1,
-            category: (t.category !== undefined ? t.category : "").trim(),
-            createdAt: t.createdAt !== undefined ? t.createdAt : new Date().toISOString(),
-            modifiedAt: t.modifiedAt !== undefined ? t.modifiedAt : new Date().toISOString(),
-            dueDate: t.dueDate !== undefined ? t.dueDate : "",
+            priority: t.priority != null ? t.priority : 1,
+            category: (t.category != null ? String(t.category) : "").trim(),
+            createdAt: t.createdAt != null ? t.createdAt : new Date().toISOString(),
+            modifiedAt: t.modifiedAt != null ? t.modifiedAt : new Date().toISOString(),
+            dueDate: t.dueDate != null ? t.dueDate : "",
             sublist: normalizeSublist(t.sublist)
         }
     }
@@ -80,8 +62,8 @@ ListModel {
         if (Array.isArray(sub)) {
             for (var i = 0; i < sub.length; i++) {
                 out.push({
-                    uuid: (sub[i].uuid !== undefined && sub[i].uuid !== "") ? sub[i].uuid : newUuid(),
-                    title: sub[i].title !== undefined ? sub[i].title : "",
+                    uuid: (sub[i].uuid != null && sub[i].uuid !== "") ? sub[i].uuid : newUuid(),
+                    title: sub[i].title != null ? sub[i].title : "",
                     done: sub[i].done === true
                 })
             }
@@ -89,8 +71,8 @@ ListModel {
             for (var j = 0; j < sub.count; j++) {
                 var e = sub.get(j)
                 out.push({
-                    uuid: (e.uuid !== undefined && e.uuid !== "") ? e.uuid : newUuid(),
-                    title: e.title !== undefined ? e.title : "",
+                    uuid: (e.uuid != null && e.uuid !== "") ? e.uuid : newUuid(),
+                    title: e.title != null ? e.title : "",
                     done: e.done === true
                 })
             }
@@ -102,7 +84,7 @@ ListModel {
         if (!raw || raw === "" || raw === "[]") return []
         try {
             var parsed = JSON.parse(raw)
-            if (Array.isArray(parsed)) return parsed
+            if (Array.isArray(parsed)) return parsed.filter(function(x) { return x != null })
             return []
         } catch(e) { return [] }
     }
@@ -114,7 +96,14 @@ ListModel {
     // most recent task write (the remote "knew about" it and chose to omit it).
     // Tasks added locally after the remote's last write are kept.
     function loadFromShell(json) {
-        if (!json || json.trim() === "") return
+        if (!json || json.trim() === "") {
+            if (count === 0 && !plasmoid.configuration.migratedToFile) {
+                _addDefaultTasks()
+                save()
+                modelReloaded()
+            }
+            return
+        }
         try {
             var doc = JSON.parse(json)
             var incoming
@@ -124,11 +113,20 @@ ListModel {
 
             var changed = false
 
-            // If remote sent an empty task list, treat it as a full wipe
-            if (incoming.length === 0 && count > 0) {
-                for (var w = count - 1; w >= 0; w--)
-                    remove(w)
-                changed = true
+            if (incoming.length === 0) {
+                if (count > 0) {
+                    // Remote wiped all tasks -propagate deletion
+                    for (var w = count - 1; w >= 0; w--)
+                        remove(w)
+                    save()
+                    modelReloaded()
+                } else if (!plasmoid.configuration.migratedToFile) {
+                    // Empty file on a fresh instance -inject defaults
+                    _addDefaultTasks()
+                    save()
+                    modelReloaded()
+                }
+                return
             }
 
             // Compute the remote's knowledge horizon and UUID set from raw data,
@@ -154,10 +152,10 @@ ListModel {
                 var inc = normalizeTask(incoming[j])
                 // Treat a missing modifiedAt as epoch so external-tool tasks without
                 // a timestamp never silently overwrite locally-modified data.
-                if (incoming[j].modifiedAt === undefined) inc.modifiedAt = "1970-01-01T00:00:00.000Z"
+                if (!incoming[j].modifiedAt) inc.modifiedAt = "1970-01-01T00:00:00.000Z"
                 var idx = currentByUuid[inc.uuid]
                 if (idx !== undefined) {
-                    // Task exists locally — update in-place if incoming is newer
+                    // Task exists locally -update in-place if incoming is newer
                     var existing = get(idx)
                     if (inc.modifiedAt > existing.modifiedAt) {
                         setProperty(idx, "title", inc.title)
@@ -168,7 +166,7 @@ ListModel {
                             setProperty(idx, "createdAt", inc.createdAt)
                         setProperty(idx, "modifiedAt", inc.modifiedAt)
                         setProperty(idx, "dueDate", inc.dueDate)
-                        // Sublist is a child ListModel — update in-place
+                        // Sublist is a child ListModel -update in-place
                         var sub = existing.sublist
                         if (sub && typeof sub.clear === "function") {
                             sub.clear()
@@ -180,7 +178,7 @@ ListModel {
                         changed = true
                     }
                 } else {
-                    // New task from remote — append and register in the map so a
+                    // New task from remote -append and register in the map so a
                     // duplicate UUID in the incoming file is not appended twice.
                     append(inc)
                     currentByUuid[inc.uuid] = count - 1
@@ -201,7 +199,7 @@ ListModel {
                 }
             }
 
-            // Only write back when the merge changed something — avoids an infinite
+            // Only write back when the merge changed something -avoids an infinite
             // poll→read→save→mtime-change→poll loop. Note: save() bumps the file mtime
             // so one extra poll cycle fires per sync event; the second loadFromShell
             // finds changed=false and breaks the cycle.
@@ -214,11 +212,85 @@ ListModel {
         }
     }
 
+    function _addDefaultTasks() {
+        var now = new Date().toISOString()
+        var today = now.substring(0, 10)
+        var tomorrow = new Date(Date.now() + 86400000).toISOString().substring(0, 10)
+        append(normalizeTask({
+            uuid: newUuid(),
+            title: "Click the subtask count to open a sublist",
+            done: false,
+            priority: 1,
+            category: "",
+            createdAt: now,
+            modifiedAt: now,
+            dueDate: "",
+            sublist: [
+                { uuid: newUuid(), title: "Tasks can nest one level deep", done: false },
+                { uuid: newUuid(), title: "Right-click task to date/category/priority", done: false },
+                { uuid: newUuid(), title: "Drag tasks to reorder", done: false }
+            ]
+        }))
+        append(normalizeTask({
+            uuid: newUuid(),
+            title: "Right click and configure KDoit",
+            done: false,
+            priority: 1,
+            category: "",
+            createdAt: now,
+            modifiedAt: now,
+            dueDate: "",
+            sublist: []
+        }))
+        append(normalizeTask({
+            uuid: newUuid(),
+            title: "Fix the bug that only appears on Fridays",
+            done: false,
+            priority: 2,
+            category: "Work",
+            createdAt: now,
+            modifiedAt: now,
+            dueDate: today,
+            sublist: [
+                { uuid: newUuid(), title: "Reproduce it on a Friday", done: false },
+                { uuid: newUuid(), title: "Convince yourself it's the framework's fault", done: false }
+            ]
+        }))
+        append(normalizeTask({
+            uuid: newUuid(),
+            title: "Reply to that email from three weeks ago",
+            done: false,
+            priority: 1,
+            category: "Personal",
+            createdAt: now,
+            modifiedAt: now,
+            dueDate: tomorrow,
+            sublist: [
+                { uuid: newUuid(), title: "Open the email", done: false },
+                { uuid: newUuid(), title: "Type 'Hi'", done: false },
+                { uuid: newUuid(), title: "Panic and close the tab", done: false }
+            ]
+        }))
+        append(normalizeTask({
+            uuid: newUuid(),
+            title: "Exit vim",
+            done: false,
+            priority: 0,
+            category: "Education",
+            createdAt: now,
+            modifiedAt: now,
+            dueDate: "",
+            sublist: [
+                { uuid: newUuid(), title: "Try :q", done: true },
+                { uuid: newUuid(), title: "Try :quit", done: true },
+                { uuid: newUuid(), title: "Google 'how to exit vim'", done: false },
+                { uuid: newUuid(), title: "Accept your new life here", done: false }
+            ]
+        }))
+    }
+
     function load() {
         clear()
-        // XHR for local files is blocked in Plasma's QML environment; read from
-        // KConfig (tasksJson) synchronously and kick off an async shell read of the
-        // file so external changes (e.g. Syncthing) are applied on startup.
         var arr = _parseConfigJson(plasmoid.configuration.tasksJson)
         for (var i = 0; i < arr.length; i++)
             append(normalizeTask(arr[i]))
@@ -232,29 +304,199 @@ ListModel {
             var t = get(i)
             var checkbox = t.done ? "- [x]" : "- [ ]"
             var meta = []
-            if (t.priority === 2) meta.push("\u23F6")
-            else if (t.priority === 1) meta.push("\uD83D\uDD3A")
+            if (t.priority === 2) meta.push("\u23EB")
+            else if (t.priority === 1) meta.push("\uD83D\uDD3C")
             else if (t.priority === 0) meta.push("\uD83D\uDD3D")
             if (t.dueDate !== "") meta.push("\uD83D\uDCC5 " + t.dueDate)
             if (t.category !== "") meta.push("#" + t.category)
             var suffix = meta.length > 0 ? " " + meta.join(" ") : ""
-            lines.push(checkbox + " " + t.title + suffix)
+            var comment = " <!-- kdoit-id:" + t.uuid + " modifiedAt:" + t.modifiedAt + " -->"
+            lines.push(checkbox + " " + t.title + suffix + comment)
             var sub = t.sublist
             var subCount = (sub && typeof sub.count === "number") ? sub.count : (sub ? sub.length || 0 : 0)
             for (var j = 0; j < subCount; j++) {
                 var s = (sub && typeof sub.get === "function") ? sub.get(j) : sub[j]
                 var subCheck = s.done ? "- [x]" : "- [ ]"
-                lines.push("  " + subCheck + " " + s.title)
+                var subComment = s.uuid ? " <!-- kdoit-id:" + s.uuid + " -->" : ""
+                lines.push("  " + subCheck + " " + s.title + subComment)
             }
         }
         lines.push("")
         return lines.join("\n")
     }
 
-    function save() {
+    // --- iCal export helpers (RFC 5545) ---
+
+    function _toUtf8Bytes(str) {
+        var bytes = []
+        for (var i = 0; i < str.length; i++) {
+            var c = str.charCodeAt(i)
+            if (c >= 0xD800 && c <= 0xDBFF && i + 1 < str.length) {
+                var next = str.charCodeAt(i + 1)
+                if (next >= 0xDC00 && next <= 0xDFFF) {
+                    c = 0x10000 + ((c - 0xD800) << 10) + (next - 0xDC00)
+                    i++
+                }
+            }
+            if (c < 0x80) {
+                bytes.push(c)
+            } else if (c < 0x800) {
+                bytes.push(0xC0 | (c >> 6), 0x80 | (c & 0x3F))
+            } else if (c < 0x10000) {
+                bytes.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F))
+            } else {
+                bytes.push(0xF0 | (c >> 18), 0x80 | ((c >> 12) & 0x3F), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F))
+            }
+        }
+        return bytes
+    }
+
+    function _icalFoldLine(line) {
+        var utf8Bytes = _toUtf8Bytes(line)
+        if (utf8Bytes.length <= 75) return [line]
+        var segments = []
+        var byteIdx = 0
+        var charIdx = 0
+        var isFirst = true
+        while (byteIdx < utf8Bytes.length) {
+            // Continuation lines carry a leading SPACE (RFC 5545 §3.1), so limit content to 74 bytes.
+            var maxBytes = isFirst ? 75 : 74
+            var segEnd = Math.min(byteIdx + maxBytes, utf8Bytes.length)
+            while (segEnd > byteIdx && (utf8Bytes[segEnd] & 0xC0) === 0x80) segEnd--
+            var segBytes = segEnd - byteIdx
+            var bUsed = 0
+            var startChar = charIdx
+            while (bUsed < segBytes && charIdx < line.length) {
+                var ch = line.charCodeAt(charIdx)
+                if (ch >= 0xD800 && ch <= 0xDBFF && charIdx + 1 < line.length) {
+                    var ch2 = line.charCodeAt(charIdx + 1)
+                    if (ch2 >= 0xDC00 && ch2 <= 0xDFFF) { bUsed += 4; charIdx += 2; continue }
+                }
+                bUsed += (ch < 0x80) ? 1 : (ch < 0x800) ? 2 : (ch < 0x10000) ? 3 : 4
+                charIdx++
+            }
+            var seg = line.substring(startChar, charIdx)
+            segments.push(isFirst ? seg : " " + seg)
+            byteIdx = segEnd
+            isFirst = false
+        }
+        return segments
+    }
+
+    function _icalEscapeText(text) {
+        if (!text) return ""
+        return text.replace(/\\/g, "\\\\")
+                   .replace(/;/g, "\\;")
+                   .replace(/,/g, "\\,")
+                   .replace(/\r\n/g, "\\n")
+                   .replace(/\r/g, "\\n")
+                   .replace(/\n/g, "\\n")
+    }
+
+    function _toIcalTimestamp(isoStr) {
+        if (!isoStr) return ""
+        var d = new Date(isoStr)
+        if (isNaN(d.getTime())) return ""
+        var p = function(n) { return n < 10 ? "0" + n : "" + n }
+        return d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate()) +
+               "T" + p(d.getUTCHours()) + p(d.getUTCMinutes()) + p(d.getUTCSeconds()) + "Z"
+    }
+
+    function _toIcalDate(dateStr) {
+        if (!dateStr) return ""
+        return dateStr.replace(/-/g, "")
+    }
+
+    function _addVtodoLines(allLines, task, parentUuid, dtstamp) {
+        allLines.push("BEGIN:VTODO")
+        allLines.push("UID:" + task.uuid)
+        allLines.push("DTSTAMP:" + dtstamp)
+        allLines.push("SUMMARY:" + _icalEscapeText(task.title))
+        if (task.dueDate) {
+            allLines.push("DUE;VALUE=DATE:" + _toIcalDate(task.dueDate))
+        }
+        allLines.push("STATUS:" + (task.done ? "COMPLETED" : "NEEDS-ACTION"))
+        if (task.done && task.modifiedAt) {
+            allLines.push("COMPLETED:" + _toIcalTimestamp(task.modifiedAt))
+        }
+        if (task.priority !== undefined && task.priority !== null) {
+            var icalPriority = 0
+            if (task.priority === 2) icalPriority = 1
+            else if (task.priority === 1) icalPriority = 5
+            if (icalPriority > 0) {
+                allLines.push("PRIORITY:" + icalPriority)
+            }
+        }
+        if (task.category) {
+            allLines.push("CATEGORIES:" + _icalEscapeText(task.category))
+        }
+        if (task.createdAt) {
+            allLines.push("CREATED:" + _toIcalTimestamp(task.createdAt))
+        }
+        if (task.modifiedAt) {
+            allLines.push("LAST-MODIFIED:" + _toIcalTimestamp(task.modifiedAt))
+        }
+        if (parentUuid) {
+            allLines.push("RELATED-TO;RELTYPE=PARENT:" + parentUuid)
+        }
+        allLines.push("END:VTODO")
+    }
+
+    function saveIcs() {
+        try {
+            var path = plasmoid.configuration.storagePath
+            if (path === "") return
+            var icsPath = path.replace(/\.json$/i, ".ics")
+            if (icsPath === path) icsPath = path + ".ics"
+
+            var dtstamp = _toIcalTimestamp(new Date().toISOString())
+
+            var allLines = []
+            allLines.push("BEGIN:VCALENDAR")
+            allLines.push("VERSION:2.0")
+            allLines.push("PRODID:-//KDoit//KDoit//EN")
+
+            var vtodoCount = 0
+            for (var i = 0; i < count; i++) {
+                var t = get(i)
+                if (!t.dueDate || t.dueDate === "") continue
+                _addVtodoLines(allLines, t, null, dtstamp)
+                vtodoCount++
+                var sub = t.sublist
+                var subCount = (sub && typeof sub.count === "number") ? sub.count : (sub ? sub.length || 0 : 0)
+                for (var j = 0; j < subCount; j++) {
+                    var s = (sub && typeof sub.get === "function") ? sub.get(j) : sub[j]
+                    _addVtodoLines(allLines, s, t.uuid, dtstamp)
+                }
+            }
+
+            if (vtodoCount === 0) return
+
+            allLines.push("END:VCALENDAR")
+
+            var foldedLines = []
+            for (var f = 0; f < allLines.length; f++) {
+                var segs = _icalFoldLine(allLines[f])
+                for (var k = 0; k < segs.length; k++)
+                    foldedLines.push(segs[k])
+            }
+
+            var ical = foldedLines.join("\r\n")
+            var b64 = _base64(ical)
+            var lastSlash = icsPath.lastIndexOf("/")
+            var dir = lastSlash === -1 ? "." : icsPath.substring(0, lastSlash)
+            var cmd = "mkdir -p " + _shellArg(dir) + " && " +
+                "printf '%s' '" + b64 + "' | base64 -d > " + _shellArg(icsPath + ".tmp") + " && " +
+                "mv -f " + _shellArg(icsPath + ".tmp") + " " + _shellArg(icsPath)
+            runShellCmd(cmd)
+        } catch(e) {
+            console.warn("KDoit saveIcs:", e)
+        }
+    }
+
+    function _saveJsonOnly() {
         var path = plasmoid.configuration.storagePath
         if (path === "") return
-
         var doc = { version: 1, tasks: [] }
         for (var i = 0; i < count; i++) {
             var t = get(i)
@@ -271,35 +513,206 @@ ListModel {
             })
         }
         var json = JSON.stringify(doc, null, 2)
-
-        // Keep KConfig in sync so startup load() has reliable data even if file
-        // read is unavailable or the file path changes.
         plasmoid.configuration.tasksJson = JSON.stringify(doc.tasks)
-
-        // Write to file for Syncthing / external tool access.
         var b64 = _base64(json)
-        var dir = path.substring(0, path.lastIndexOf("/"))
+        var lastSlash = path.lastIndexOf("/")
+        var dir = lastSlash === -1 ? "." : path.substring(0, lastSlash)
         var cmd = "mkdir -p " + _shellArg(dir) + " && " +
             "printf '%s' '" + b64 + "' | base64 -d > " + _shellArg(path + ".tmp") + " && " +
             "mv -f " + _shellArg(path + ".tmp") + " " + _shellArg(path)
         runShellCmd(cmd)
+        if (!plasmoid.configuration.migratedToFile)
+            plasmoid.configuration.migratedToFile = true
+    }
 
+    function save() {
+        _saveJsonOnly()
+        if (plasmoid.configuration.enableIcsExport)
+            saveIcs()
         if (plasmoid.configuration.markdownExport) {
+            var path = plasmoid.configuration.storagePath
+            if (path === "") return
             var mdPath = plasmoid.configuration.markdownPath
             if (mdPath === "") {
-                mdPath = path.replace(/\.json$/, ".md")
+                mdPath = path.replace(/\.json$/i, ".md")
+                if (mdPath === path) mdPath = path + ".md"
             }
+            if (mdPath === path) return
             var md = _serializeMarkdown()
             var mdB64 = _base64(md)
-            var mdDir = mdPath.substring(0, mdPath.lastIndexOf("/"))
+            var mdLastSlash = mdPath.lastIndexOf("/")
+            var mdDir = mdLastSlash === -1 ? "." : mdPath.substring(0, mdLastSlash)
             var mdCmd = "mkdir -p " + _shellArg(mdDir) + " && " +
                 "printf '%s' '" + mdB64 + "' | base64 -d > " + _shellArg(mdPath + ".tmp") + " && " +
                 "mv -f " + _shellArg(mdPath + ".tmp") + " " + _shellArg(mdPath)
             runShellCmd(mdCmd)
         }
+    }
 
-        if (!plasmoid.configuration.migratedToFile)
-            plasmoid.configuration.migratedToFile = true
+    function _parseMarkdown(md) {
+        var tasks = []
+        if (!md || md.trim() === "") return tasks
+        var lines = md.split("\n")
+        var currentTask = null
+        var commentRe = /<!--\s*kdoit-id:([a-fA-F0-9-]+)(?:\s+modifiedAt:([^\s]+))?\s*-->/
+
+        var parseMeta = function(text) {
+            var uuid = null, modifiedAt = null
+            var m = commentRe.exec(text)
+            if (m) {
+                uuid = m[1]
+                modifiedAt = m[2] || null
+                text = text.replace(commentRe, "").trim()
+            }
+            var category = ""
+            var catMatch = /(?:^|\s)#([^\s#]+(?:\s+[^\s#]+)*)$/.exec(text)
+            if (catMatch) {
+                category = catMatch[1]
+                text = text.substring(0, catMatch.index).trim()
+            }
+            var dueDate = ""
+            var calIdx = text.indexOf("📅")
+            if (calIdx !== -1) {
+                var dateMatch = /\d{4}-\d{2}-\d{2}/.exec(text.substring(calIdx))
+                if (dateMatch) {
+                    dueDate = dateMatch[0]
+                    text = text.substring(0, calIdx).trim()
+                }
+            }
+            var priority = 1
+            var highIdx = text.lastIndexOf("⏫")
+            var medIdx  = text.lastIndexOf("🔼")
+            var lowIdx  = text.lastIndexOf("🔽")
+            var maxIdx = Math.max(highIdx, medIdx, lowIdx)
+            if (maxIdx !== -1) {
+                if (maxIdx === highIdx) priority = 2
+                else if (maxIdx === medIdx) priority = 1
+                else priority = 0
+                text = text.substring(0, maxIdx).trim()
+            }
+            return { title: text, priority: priority, dueDate: dueDate, category: category, uuid: uuid, modifiedAt: modifiedAt }
+        }
+
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i]
+            var subMatch = /^[ \t]{2,}- \[([ xX])\]\s+(.*)$/.exec(line)
+            if (subMatch && currentTask) {
+                var subText = subMatch[2]
+                var subDone = subMatch[1].toLowerCase() === "x"
+                var subCommentMatch = commentRe.exec(subText)
+                var subUuid = null
+                if (subCommentMatch) {
+                    subUuid = subCommentMatch[1]
+                    subText = subText.replace(commentRe, "").trim()
+                }
+                currentTask.sublist.push({ uuid: subUuid || newUuid(), title: subText.trim(), done: subDone })
+                continue
+            }
+            var topMatch = /^- \[([ xX])\]\s+(.*)$/.exec(line)
+            if (topMatch) {
+                if (currentTask) tasks.push(currentTask)
+                var done = topMatch[1].toLowerCase() === "x"
+                var meta = parseMeta(topMatch[2])
+                currentTask = {
+                    uuid: meta.uuid,
+                    title: meta.title,
+                    done: done,
+                    priority: meta.priority,
+                    category: meta.category,
+                    dueDate: meta.dueDate,
+                    modifiedAt: meta.modifiedAt,
+                    sublist: []
+                }
+            }
+        }
+        if (currentTask) tasks.push(currentTask)
+        return tasks
+    }
+
+    function mergeImportedTasks(parsedTasks) {
+        var imported = 0
+        var updated = 0
+        var now = new Date().toISOString()
+        var addToTop = plasmoid.configuration.addToTop
+        var byUuid = {}
+        for (var i = 0; i < count; i++) {
+            var cur = get(i)
+            if (cur.uuid) byUuid[cur.uuid] = i
+        }
+        var seenUuids = {}
+        var deduped = []
+        for (var d = parsedTasks.length - 1; d >= 0; d--) {
+            var pt = parsedTasks[d]
+            if (pt.uuid && seenUuids[pt.uuid]) continue
+            if (pt.uuid) seenUuids[pt.uuid] = true
+            deduped.unshift(pt)
+        }
+        for (var j = 0; j < deduped.length; j++) {
+            var parsed = deduped[j]
+            if (parsed.uuid && byUuid[parsed.uuid] !== undefined) {
+                var idx = byUuid[parsed.uuid]
+                var existing = get(idx)
+                if (parsed.modifiedAt && parsed.modifiedAt > existing.modifiedAt) {
+                    setProperty(idx, "title", parsed.title)
+                    setProperty(idx, "done", parsed.done)
+                    setProperty(idx, "priority", parsed.priority)
+                    setProperty(idx, "category", parsed.category)
+                    setProperty(idx, "dueDate", parsed.dueDate)
+                    setProperty(idx, "modifiedAt", parsed.modifiedAt)
+                    var sub = existing.sublist
+                    if (sub && typeof sub.clear === "function") {
+                        sub.clear()
+                        for (var k = 0; k < parsed.sublist.length; k++)
+                            sub.append(parsed.sublist[k])
+                    } else {
+                        setProperty(idx, "sublist", parsed.sublist)
+                    }
+                    updated++
+                }
+            } else {
+                // No UUID match -skip if a task with the same title already exists
+                // (prevents duplication when importing a file without UUID comments)
+                var existsByTitle = false
+                for (var ti = 0; ti < count; ti++) {
+                    if (get(ti).title === parsed.title) { existsByTitle = true; break }
+                }
+                if (!existsByTitle) {
+                    var newTask = normalizeTask({
+                        uuid: parsed.uuid || newUuid(),
+                        title: parsed.title,
+                        done: parsed.done,
+                        priority: parsed.priority,
+                        category: parsed.category,
+                        dueDate: parsed.dueDate,
+                        sublist: parsed.sublist,
+                        createdAt: now,
+                        modifiedAt: parsed.modifiedAt || now
+                    })
+                    if (addToTop) {
+                        insert(0, newTask)
+                        for (var uuid in byUuid) byUuid[uuid] = byUuid[uuid] + 1
+                    } else {
+                        append(newTask)
+                    }
+                    imported++
+                }
+            }
+        }
+        return { imported: imported, updated: updated }
+    }
+
+    function importFromMarkdown(mdText) {
+        try {
+            if (!mdText || mdText.trim() === "") return { imported: 0, updated: 0 }
+            var parsed = _parseMarkdown(mdText)
+            var result = mergeImportedTasks(parsed)
+            if (result.imported > 0 || result.updated > 0)
+                save()
+            return result
+        } catch(e) {
+            console.error("KDoit markdown import failed:", e)
+            return { imported: 0, updated: 0, error: e.toString() }
+        }
     }
 
     function addTask(title, priority, toTop) {
@@ -365,27 +778,32 @@ ListModel {
     }
 
     function insertTask(index, task) {
+        var t = normalizeTask(task)
         var clamped = Math.max(0, Math.min(index, count))
         insert(clamped, {
-            uuid: task.uuid || newUuid(),
-            title: task.title,
-            done: task.done,
-            priority: task.priority,
-            category: task.category,
-            createdAt: task.createdAt,
-            modifiedAt: task.modifiedAt || new Date().toISOString(),
-            dueDate: task.dueDate,
-            sublist: normalizeSublist(task.sublist)
+            uuid: t.uuid,
+            title: t.title,
+            done: t.done,
+            priority: t.priority,
+            category: t.category,
+            createdAt: t.createdAt,
+            modifiedAt: t.modifiedAt,
+            dueDate: t.dueDate,
+            sublist: normalizeSublist(t.sublist)
         })
         save()
     }
 
     function deleteCompleted() {
+        var changed = false
         for (var i = count - 1; i >= 0; i--) {
-            if (get(i).done === true)
+            if (get(i).done === true) {
                 remove(i)
+                changed = true
+            }
         }
-        save()
+        if (changed)
+            save()
     }
 
     function clearCategoryFromAll(oldCategory) {
@@ -432,7 +850,7 @@ ListModel {
     Component.onCompleted: {
         var path = plasmoid.configuration.storagePath
         if (path === "") {
-            var dataHome = Platform.StandardPaths.writableLocation(Platform.StandardPaths.GenericDataLocation).toString()
+            var dataHome = StandardPaths.writableLocation(StandardPaths.GenericDataLocation).toString()
             if (dataHome.startsWith("file://"))
                 dataHome = dataHome.substring(7)
             plasmoid.configuration.storagePath = dataHome + "/kdoit/tasks.json"
