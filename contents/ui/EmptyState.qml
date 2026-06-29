@@ -6,7 +6,7 @@ import org.kde.kirigami as Kirigami
 Item {
     id: root
 
-    property string message: i18n("No tasks yet")
+    property string message: i18n("Add your first task below")
     property string iconSource: "view-task"
 
     ColumnLayout {

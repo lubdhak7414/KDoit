@@ -50,7 +50,7 @@ Kirigami.Page {
             id: titleField
             Kirigami.FormData.label: i18n("Widget title:")
             implicitWidth: Kirigami.Units.gridUnit * 20
-            placeholderText: i18n("My Tasks")
+            placeholderText: i18n("My To-Do List")
             Component.onCompleted: text = root.cfg_listTitle
             onEditingFinished: root.cfg_listTitle = text.trim() || root.cfg_listTitleDefault
         }
@@ -63,7 +63,7 @@ Kirigami.Page {
             id: pathField
             Kirigami.FormData.label: i18n("Tasks file:")
             implicitWidth: Kirigami.Units.gridUnit * 20
-            placeholderText: i18n("e.g. /home/user/.local/share/kdoit/tasks.json")
+            placeholderText: i18n("Leave empty for local storage")
             Component.onCompleted: text = root.cfg_storagePath
             onEditingFinished: {
                 var v = text.trim()
@@ -142,7 +142,7 @@ Kirigami.Page {
 
         PlasmaComponents.Label {
             Kirigami.FormData.label: ""
-            text: i18n("Polls the task file every 3 seconds to pick up changes from Syncthing or other sync tools. Disable on single-machine setups to save resources.")
+            text: i18n("Check for external changes every 3 seconds (e.g. Syncthing, shared folder). Turn off on a single machine to save resources.")
             font.pointSize: Kirigami.Theme.smallFont.pointSize
             color: Kirigami.Theme.disabledTextColor
             wrapMode: Text.WordWrap
@@ -165,7 +165,7 @@ Kirigami.Page {
             Kirigami.FormData.label: i18n("Markdown file:")
             implicitWidth: Kirigami.Units.gridUnit * 20
             visible: root.cfg_markdownExport
-            placeholderText: i18n("e.g. /home/user/.local/share/kdoit/tasks.md")
+            placeholderText: i18n("Leave empty to save next to JSON file")
             Component.onCompleted: text = root.cfg_markdownPath
             onEditingFinished: {
                 var v = text.trim()
@@ -179,7 +179,7 @@ Kirigami.Page {
         PlasmaComponents.Label {
             Kirigami.FormData.label: ""
             visible: root.cfg_markdownExport
-            text: i18n("Leave blank to write next to the tasks JSON file. Uses Obsidian Tasks plugin syntax (checkboxes, due dates, priorities, categories).")
+            text: i18n("Uses Obsidian Tasks syntax (checkboxes, dates, priorities, categories). Leave empty to save next to the JSON file.")
             font.pointSize: Kirigami.Theme.smallFont.pointSize
             color: Kirigami.Theme.disabledTextColor
             wrapMode: Text.WordWrap

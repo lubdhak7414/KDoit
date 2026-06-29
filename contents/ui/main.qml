@@ -670,11 +670,11 @@ PlasmoidItem {
                 }
 
                 PlasmaComponents.Button {
-                    icon.name: "search-symbolic"
+                    icon.name: "view-filter-symbolic"
                     flat: true
                     checkable: true
                     display: PlasmaComponents.AbstractButton.IconOnly
-                    text: i18n("Search")
+                    text: i18n("Filter")
                     Binding on checked {
                         value: root.searchActive
                     }
@@ -699,7 +699,7 @@ PlasmoidItem {
                 id: searchField
                 Layout.fillWidth: true
                 visible: root.searchActive
-                placeholderText: i18n("Search tasks...")
+                placeholderText: i18n("Filter tasks...")
                 onTextChanged: root.searchText = text
                 Keys.onEscapePressed: {
                     text = ""
@@ -784,11 +784,11 @@ PlasmoidItem {
                 visible: root.visibleCount === 0
                 message: root.currentModel.count > 0
                     ? (root.searchText.length > 0 || root.categoryFilter !== ""
-                        ? i18n("No matching tasks")
-                        : i18n("All tasks completed"))
-                    : i18n("No tasks yet")
+                        ? i18n("No tasks match your search")
+                        : i18n("All done! Nice work."))
+                    : i18n("Add your first task below")
                 iconSource: root.currentModel.count > 0 && (root.searchText.length > 0 || root.categoryFilter !== "")
-                    ? "search-symbolic"
+                    ? "view-filter-symbolic"
                     : "view-task"
             }
 
@@ -797,8 +797,8 @@ PlasmoidItem {
                 Layout.fillWidth: true
                 visible: root._undoVisible
                 text: root.lastDeleted && (root.lastDeleted.type === "multi" || root.lastDeleted.type === "multi-sublist")
-                      ? i18np("1 task deleted", "%1 tasks deleted", root.lastDeleted.items.length)
-                      : i18n("Task deleted")
+                      ? i18np("1 task removed", "%1 tasks removed", root.lastDeleted.items.length)
+                      : i18n("Task removed")
                 type: Kirigami.MessageType.Information
                 actions: [
                     Kirigami.Action {
