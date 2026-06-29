@@ -287,19 +287,21 @@ ListModel {
             var t = get(i)
             var checkbox = t.done ? "- [x]" : "- [ ]"
             var meta = []
-            if (t.priority === 2) meta.push("\u23F6")
-            else if (t.priority === 1) meta.push("\uD83D\uDD3A")
+            if (t.priority === 2) meta.push("\u23EB")
+            else if (t.priority === 1) meta.push("\uD83D\uDD3C")
             else if (t.priority === 0) meta.push("\uD83D\uDD3D")
             if (t.dueDate !== "") meta.push("\uD83D\uDCC5 " + t.dueDate)
             if (t.category !== "") meta.push("#" + t.category)
             var suffix = meta.length > 0 ? " " + meta.join(" ") : ""
-            lines.push(checkbox + " " + t.title + suffix)
+            var comment = " <!-- kdoit-id:" + t.uuid + " modifiedAt:" + t.modifiedAt + " -->"
+            lines.push(checkbox + " " + t.title + suffix + comment)
             var sub = t.sublist
             var subCount = (sub && typeof sub.count === "number") ? sub.count : (sub ? sub.length || 0 : 0)
             for (var j = 0; j < subCount; j++) {
                 var s = (sub && typeof sub.get === "function") ? sub.get(j) : sub[j]
                 var subCheck = s.done ? "- [x]" : "- [ ]"
-                lines.push("  " + subCheck + " " + s.title)
+                var subComment = s.uuid ? " <!-- kdoit-id:" + s.uuid + " -->" : ""
+                lines.push("  " + subCheck + " " + s.title + subComment)
             }
         }
         lines.push("")
