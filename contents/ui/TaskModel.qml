@@ -20,35 +20,7 @@ ListModel {
 
     function _base64(str) {
         var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
-        var bytes = []
-        for (var i = 0; i < str.length; i++) {
-            var c = str.charCodeAt(i)
-            // Combine surrogate pairs into a single code point before UTF-8 encoding.
-            // charCodeAt returns individual UTF-16 units; without this, non-BMP chars
-            // (emoji, U+10000+) each surrogate gets encoded as 3 bytes → invalid UTF-8.
-            if (c >= 0xD800 && c <= 0xDBFF && i + 1 < str.length) {
-                var next = str.charCodeAt(i + 1)
-                if (next >= 0xDC00 && next <= 0xDFFF) {
-                    c = 0x10000 + ((c - 0xD800) << 10) + (next - 0xDC00)
-                    i++
-                }
-            }
-            if (c < 0x80) {
-                bytes.push(c)
-            } else if (c < 0x800) {
-                bytes.push(0xC0 | (c >> 6))
-                bytes.push(0x80 | (c & 0x3F))
-            } else if (c < 0x10000) {
-                bytes.push(0xE0 | (c >> 12))
-                bytes.push(0x80 | ((c >> 6) & 0x3F))
-                bytes.push(0x80 | (c & 0x3F))
-            } else {
-                bytes.push(0xF0 | (c >> 18))
-                bytes.push(0x80 | ((c >> 12) & 0x3F))
-                bytes.push(0x80 | ((c >> 6) & 0x3F))
-                bytes.push(0x80 | (c & 0x3F))
-            }
-        }
+        var bytes = _toUtf8Bytes(str)
         var result = ""
         for (var j = 0; j < bytes.length; j += 3) {
             var b0 = bytes[j]
@@ -345,6 +317,175 @@ ListModel {
         return lines.join("\n")
     }
 
+    // --- iCal export helpers (RFC 5545) ---
+
+    function _toUtf8Bytes(str) {
+        var bytes = []
+        for (var i = 0; i < str.length; i++) {
+            var c = str.charCodeAt(i)
+            if (c >= 0xD800 && c <= 0xDBFF && i + 1 < str.length) {
+                var next = str.charCodeAt(i + 1)
+                if (next >= 0xDC00 && next <= 0xDFFF) {
+                    c = 0x10000 + ((c - 0xD800) << 10) + (next - 0xDC00)
+                    i++
+                }
+            }
+            if (c < 0x80) {
+                bytes.push(c)
+            } else if (c < 0x800) {
+                bytes.push(0xC0 | (c >> 6), 0x80 | (c & 0x3F))
+            } else if (c < 0x10000) {
+                bytes.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F))
+            } else {
+                bytes.push(0xF0 | (c >> 18), 0x80 | ((c >> 12) & 0x3F), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F))
+            }
+        }
+        return bytes
+    }
+
+    function _icalFoldLine(line) {
+        var utf8Bytes = _toUtf8Bytes(line)
+        if (utf8Bytes.length <= 75) return [line]
+        var segments = []
+        var byteIdx = 0
+        var charIdx = 0
+        var isFirst = true
+        while (byteIdx < utf8Bytes.length) {
+            // Continuation lines carry a leading SPACE (RFC 5545 §3.1), so limit content to 74 bytes.
+            var maxBytes = isFirst ? 75 : 74
+            var segEnd = Math.min(byteIdx + maxBytes, utf8Bytes.length)
+            while (segEnd > byteIdx && (utf8Bytes[segEnd] & 0xC0) === 0x80) segEnd--
+            var segBytes = segEnd - byteIdx
+            var bUsed = 0
+            var startChar = charIdx
+            while (bUsed < segBytes && charIdx < line.length) {
+                var ch = line.charCodeAt(charIdx)
+                if (ch >= 0xD800 && ch <= 0xDBFF && charIdx + 1 < line.length) {
+                    var ch2 = line.charCodeAt(charIdx + 1)
+                    if (ch2 >= 0xDC00 && ch2 <= 0xDFFF) { bUsed += 4; charIdx += 2; continue }
+                }
+                bUsed += (ch < 0x80) ? 1 : (ch < 0x800) ? 2 : (ch < 0x10000) ? 3 : 4
+                charIdx++
+            }
+            var seg = line.substring(startChar, charIdx)
+            segments.push(isFirst ? seg : " " + seg)
+            byteIdx = segEnd
+            isFirst = false
+        }
+        return segments
+    }
+
+    function _icalEscapeText(text) {
+        if (!text) return ""
+        return text.replace(/\\/g, "\\\\")
+                   .replace(/;/g, "\\;")
+                   .replace(/,/g, "\\,")
+                   .replace(/\r\n/g, "\\n")
+                   .replace(/\r/g, "\\n")
+                   .replace(/\n/g, "\\n")
+    }
+
+    function _toIcalTimestamp(isoStr) {
+        if (!isoStr) return ""
+        var d = new Date(isoStr)
+        if (isNaN(d.getTime())) return ""
+        var p = function(n) { return n < 10 ? "0" + n : "" + n }
+        return d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate()) +
+               "T" + p(d.getUTCHours()) + p(d.getUTCMinutes()) + p(d.getUTCSeconds()) + "Z"
+    }
+
+    function _toIcalDate(dateStr) {
+        if (!dateStr) return ""
+        return dateStr.replace(/-/g, "")
+    }
+
+    function _addVtodoLines(allLines, task, parentUuid, dtstamp) {
+        allLines.push("BEGIN:VTODO")
+        allLines.push("UID:" + task.uuid)
+        allLines.push("DTSTAMP:" + dtstamp)
+        allLines.push("SUMMARY:" + _icalEscapeText(task.title))
+        if (task.dueDate) {
+            allLines.push("DUE;VALUE=DATE:" + _toIcalDate(task.dueDate))
+        }
+        allLines.push("STATUS:" + (task.done ? "COMPLETED" : "NEEDS-ACTION"))
+        if (task.done && task.modifiedAt) {
+            allLines.push("COMPLETED:" + _toIcalTimestamp(task.modifiedAt))
+        }
+        if (task.priority !== undefined && task.priority !== null) {
+            var icalPriority = 0
+            if (task.priority === 2) icalPriority = 1
+            else if (task.priority === 1) icalPriority = 5
+            if (icalPriority > 0) {
+                allLines.push("PRIORITY:" + icalPriority)
+            }
+        }
+        if (task.category) {
+            allLines.push("CATEGORIES:" + _icalEscapeText(task.category))
+        }
+        if (task.createdAt) {
+            allLines.push("CREATED:" + _toIcalTimestamp(task.createdAt))
+        }
+        if (task.modifiedAt) {
+            allLines.push("LAST-MODIFIED:" + _toIcalTimestamp(task.modifiedAt))
+        }
+        if (parentUuid) {
+            allLines.push("RELATED-TO;RELTYPE=PARENT:" + parentUuid)
+        }
+        allLines.push("END:VTODO")
+    }
+
+    function saveIcs() {
+        try {
+            var path = plasmoid.configuration.storagePath
+            if (path === "") return
+            var icsPath = path.replace(/\.json$/i, ".ics")
+            if (icsPath === path) icsPath = path + ".ics"
+
+            var dtstamp = _toIcalTimestamp(new Date().toISOString())
+
+            var allLines = []
+            allLines.push("BEGIN:VCALENDAR")
+            allLines.push("VERSION:2.0")
+            allLines.push("PRODID:-//KDoit//KDoit//EN")
+
+            var vtodoCount = 0
+            for (var i = 0; i < count; i++) {
+                var t = get(i)
+                if (!t.dueDate || t.dueDate === "") continue
+                _addVtodoLines(allLines, t, null, dtstamp)
+                vtodoCount++
+                var sub = t.sublist
+                var subCount = (sub && typeof sub.count === "number") ? sub.count : (sub ? sub.length || 0 : 0)
+                for (var j = 0; j < subCount; j++) {
+                    var s = (sub && typeof sub.get === "function") ? sub.get(j) : sub[j]
+                    _addVtodoLines(allLines, s, t.uuid, dtstamp)
+                }
+            }
+
+            if (vtodoCount === 0) return
+
+            allLines.push("END:VCALENDAR")
+
+            var foldedLines = []
+            for (var f = 0; f < allLines.length; f++) {
+                var segs = _icalFoldLine(allLines[f])
+                for (var k = 0; k < segs.length; k++)
+                    foldedLines.push(segs[k])
+            }
+
+            var ical = foldedLines.join("\r\n")
+            var b64 = _base64(ical)
+            var lastSlash = icsPath.lastIndexOf("/")
+            var dir = lastSlash === -1 ? "." : icsPath.substring(0, lastSlash)
+            var cmd = "mkdir -p " + _shellArg(dir) + " && " +
+                "printf '%s' '" + b64 + "' | base64 -d > " + _shellArg(icsPath + ".tmp") + " && " +
+                "mv -f " + _shellArg(icsPath + ".tmp") + " " + _shellArg(icsPath)
+            runShellCmd(cmd)
+        } catch(e) {
+            console.warn("KDoit saveIcs:", e)
+        }
+    }
+
     function _saveJsonOnly() {
         var path = plasmoid.configuration.storagePath
         if (path === "") return
@@ -378,12 +519,14 @@ ListModel {
 
     function save() {
         _saveJsonOnly()
+        if (plasmoid.configuration.enableIcsExport)
+            saveIcs()
         if (plasmoid.configuration.markdownExport) {
             var path = plasmoid.configuration.storagePath
             if (path === "") return
             var mdPath = plasmoid.configuration.markdownPath
             if (mdPath === "") {
-                mdPath = path.replace(/\.json$/, ".md")
+                mdPath = path.replace(/\.json$/i, ".md")
                 if (mdPath === path) mdPath = path + ".md"
             }
             if (mdPath === path) return

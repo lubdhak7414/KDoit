@@ -30,6 +30,8 @@ Kirigami.Page {
     property bool cfg_markdownExportDefault: false
     property string cfg_markdownPath
     property string cfg_markdownPathDefault: ""
+    property bool cfg_enableIcsExport
+    property bool cfg_enableIcsExportDefault: false
     property string cfg_listTitle
     property string cfg_listTitleDefault: "K Do it!"
     property var _parsedManagedCategories: {
@@ -180,6 +182,23 @@ Kirigami.Page {
             Kirigami.FormData.label: ""
             visible: root.cfg_markdownExport
             text: i18n("Uses Obsidian Tasks syntax (checkboxes, dates, priorities, categories). Leave empty to save next to the JSON file.")
+            font.pointSize: Kirigami.Theme.smallFont.pointSize
+            color: Kirigami.Theme.disabledTextColor
+            wrapMode: Text.WordWrap
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 20
+        }
+
+        PlasmaComponents.CheckBox {
+            Kirigami.FormData.label: i18n("iCalendar export:")
+            text: i18n("Export tasks to .ics calendar file")
+            Binding on checked { value: root.cfg_enableIcsExport }
+            onToggled: root.cfg_enableIcsExport = checked
+        }
+
+        PlasmaComponents.Label {
+            Kirigami.FormData.label: ""
+            visible: root.cfg_enableIcsExport
+            text: i18n("Writes a .ics file with VTODO components alongside the JSON file. Calendar apps can subscribe to it for due-date reminders.")
             font.pointSize: Kirigami.Theme.smallFont.pointSize
             color: Kirigami.Theme.disabledTextColor
             wrapMode: Text.WordWrap

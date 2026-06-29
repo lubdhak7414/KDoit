@@ -57,5 +57,9 @@
             <label>Header title shown above the task list</label>
             <default></default>
         </entry>
+        <entry name="enableIcsExport" type="Bool">
+            <label>Export tasks to .ics calendar file</label>
+            <default>false</default>
+        </entry>
     </group>
 </kcfg>
