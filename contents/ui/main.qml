@@ -635,6 +635,15 @@ PlasmoidItem {
                             searchField.text = ""
                     }
                 }
+
+                PlasmaComponents.Button {
+                    icon.name: "document-import-symbolic"
+                    flat: true
+                    display: PlasmaComponents.AbstractButton.IconOnly
+                    text: i18n("Import from Markdown")
+                    visible: plasmoid.configuration.markdownExport && !root.isSublistView()
+                    onClicked: importDialog.open()
+                }
             }
 
             PlasmaComponents.TextField {
@@ -793,6 +802,31 @@ PlasmoidItem {
                         delay: Kirigami.Units.toolTipDelay
                     }
                 }
+            }
+        }
+
+        Kirigami.Dialog {
+            id: importDialog
+            title: i18n("Import from Markdown")
+            standardButtons: Kirigami.Dialog.Ok | Kirigami.Dialog.Cancel
+            onAccepted: {
+                var mdPath = plasmoid.configuration.markdownPath
+                if (mdPath === "") {
+                    mdPath = plasmoid.configuration.storagePath.replace(/\.json$/, ".md")
+                    if (mdPath === plasmoid.configuration.storagePath) mdPath = plasmoid.configuration.storagePath + ".md"
+                }
+                mdReader.run(mdPath)
+            }
+            PlasmaComponents.Label {
+                text: {
+                    var p = plasmoid.configuration.markdownPath
+                    if (p === "") {
+                        p = plasmoid.configuration.storagePath.replace(/\.json$/, ".md")
+                        if (p === plasmoid.configuration.storagePath) p = plasmoid.configuration.storagePath + ".md"
+                    }
+                    return p
+                }
+                wrapMode: Text.WrapAnywhere
             }
         }
     }
