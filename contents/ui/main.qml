@@ -121,7 +121,7 @@ PlasmoidItem {
         clearSelection()
         _updateTrigger++
         updateDistinctCategories()
-        lastDeleted = { type: "multi", items: removed }
+        lastDeleted = { type: isSublistView() ? "multi-sublist" : "multi", items: removed }
         undoTimer.restart()
         _undoVisible = true
     }
@@ -395,7 +395,16 @@ PlasmoidItem {
     function undoDelete() {
         if (lastDeleted === null)
             return
-        if (lastDeleted.type === "multi") {
+        if (lastDeleted.type === "multi-sublist") {
+            var items = lastDeleted.items.slice().sort(function(a, b) { return a.index - b.index })
+            for (var i = 0; i < items.length; i++) {
+                var st = items[i].task
+                var clamped = Math.max(0, Math.min(items[i].index, sublistModel.count))
+                sublistModel.insert(clamped,
+                    makeSublistRow(st.uuid || taskModel.newUuid(), st.title, st.done))
+            }
+            syncSublist()
+        } else if (lastDeleted.type === "multi") {
             var items = lastDeleted.items.slice().sort(function(a, b) { return a.index - b.index })
             for (var i = 0; i < items.length; i++) {
                 var t = items[i].task
@@ -778,7 +787,7 @@ PlasmoidItem {
                 id: undoMessage
                 Layout.fillWidth: true
                 visible: root._undoVisible
-                text: root.lastDeleted && root.lastDeleted.type === "multi"
+                text: root.lastDeleted && (root.lastDeleted.type === "multi" || root.lastDeleted.type === "multi-sublist")
                       ? i18np("1 task deleted", "%1 tasks deleted", root.lastDeleted.items.length)
                       : i18n("Task deleted")
                 type: Kirigami.MessageType.Information
@@ -844,7 +853,7 @@ PlasmoidItem {
                         root._updateTrigger++
                         root.updateDistinctCategories()
                         if (removed.length > 0) {
-                            lastDeleted = { type: "multi", items: removed }
+                            lastDeleted = { type: isSublistView() ? "multi-sublist" : "multi", items: removed }
                             undoTimer.restart()
                             _undoVisible = true
                         }
