@@ -73,14 +73,14 @@ ListModel {
 
     function normalizeTask(t) {
         return {
-            uuid: (t.uuid !== undefined && t.uuid !== "") ? t.uuid : newUuid(),
-            title: t.title !== undefined ? t.title : "",
+            uuid: (t.uuid != null && t.uuid !== "") ? t.uuid : newUuid(),
+            title: t.title != null ? t.title : "",
             done: t.done === true,
-            priority: t.priority !== undefined ? t.priority : 1,
-            category: (t.category !== undefined ? t.category : "").trim(),
-            createdAt: t.createdAt !== undefined ? t.createdAt : new Date().toISOString(),
-            modifiedAt: t.modifiedAt !== undefined ? t.modifiedAt : new Date().toISOString(),
-            dueDate: t.dueDate !== undefined ? t.dueDate : "",
+            priority: t.priority != null ? t.priority : 1,
+            category: (t.category != null ? String(t.category) : "").trim(),
+            createdAt: t.createdAt != null ? t.createdAt : new Date().toISOString(),
+            modifiedAt: t.modifiedAt != null ? t.modifiedAt : new Date().toISOString(),
+            dueDate: t.dueDate != null ? t.dueDate : "",
             sublist: normalizeSublist(t.sublist)
         }
     }
@@ -90,8 +90,8 @@ ListModel {
         if (Array.isArray(sub)) {
             for (var i = 0; i < sub.length; i++) {
                 out.push({
-                    uuid: (sub[i].uuid !== undefined && sub[i].uuid !== "") ? sub[i].uuid : newUuid(),
-                    title: sub[i].title !== undefined ? sub[i].title : "",
+                    uuid: (sub[i].uuid != null && sub[i].uuid !== "") ? sub[i].uuid : newUuid(),
+                    title: sub[i].title != null ? sub[i].title : "",
                     done: sub[i].done === true
                 })
             }
@@ -99,8 +99,8 @@ ListModel {
             for (var j = 0; j < sub.count; j++) {
                 var e = sub.get(j)
                 out.push({
-                    uuid: (e.uuid !== undefined && e.uuid !== "") ? e.uuid : newUuid(),
-                    title: e.title !== undefined ? e.title : "",
+                    uuid: (e.uuid != null && e.uuid !== "") ? e.uuid : newUuid(),
+                    title: e.title != null ? e.title : "",
                     done: e.done === true
                 })
             }
