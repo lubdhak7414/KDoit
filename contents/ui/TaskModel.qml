@@ -112,7 +112,7 @@ ListModel {
         if (!raw || raw === "" || raw === "[]") return []
         try {
             var parsed = JSON.parse(raw)
-            if (Array.isArray(parsed)) return parsed
+            if (Array.isArray(parsed)) return parsed.filter(function(x) { return x != null })
             return []
         } catch(e) { return [] }
     }
