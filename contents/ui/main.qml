@@ -675,7 +675,9 @@ PlasmoidItem {
                     checkable: true
                     display: PlasmaComponents.AbstractButton.IconOnly
                     text: i18n("Search")
-                    checked: root.searchActive
+                    Binding on checked {
+                        value: root.searchActive
+                    }
                     onToggled: {
                         root.searchActive = checked
                         if (!checked)
