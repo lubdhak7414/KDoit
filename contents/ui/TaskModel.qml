@@ -271,9 +271,6 @@ ListModel {
 
     function load() {
         clear()
-        // XHR for local files is blocked in Plasma's QML environment; read from
-        // KConfig (tasksJson) synchronously and kick off an async shell read of the
-        // file so external changes (e.g. Syncthing) are applied on startup.
         var arr = _parseConfigJson(plasmoid.configuration.tasksJson)
         for (var i = 0; i < arr.length; i++)
             append(normalizeTask(arr[i]))
@@ -308,10 +305,9 @@ ListModel {
         return lines.join("\n")
     }
 
-    function save() {
+    function _saveJsonOnly() {
         var path = plasmoid.configuration.storagePath
         if (path === "") return
-
         var doc = { version: 1, tasks: [] }
         for (var i = 0; i < count; i++) {
             var t = get(i)
@@ -328,35 +324,38 @@ ListModel {
             })
         }
         var json = JSON.stringify(doc, null, 2)
-
-        // Keep KConfig in sync so startup load() has reliable data even if file
-        // read is unavailable or the file path changes.
         plasmoid.configuration.tasksJson = JSON.stringify(doc.tasks)
-
-        // Write to file for Syncthing / external tool access.
         var b64 = _base64(json)
-        var dir = path.substring(0, path.lastIndexOf("/"))
+        var lastSlash = path.lastIndexOf("/")
+        var dir = lastSlash === -1 ? "." : path.substring(0, lastSlash)
         var cmd = "mkdir -p " + _shellArg(dir) + " && " +
             "printf '%s' '" + b64 + "' | base64 -d > " + _shellArg(path + ".tmp") + " && " +
             "mv -f " + _shellArg(path + ".tmp") + " " + _shellArg(path)
         runShellCmd(cmd)
+        if (!plasmoid.configuration.migratedToFile)
+            plasmoid.configuration.migratedToFile = true
+    }
 
+    function save() {
+        _saveJsonOnly()
         if (plasmoid.configuration.markdownExport) {
+            var path = plasmoid.configuration.storagePath
+            if (path === "") return
             var mdPath = plasmoid.configuration.markdownPath
             if (mdPath === "") {
                 mdPath = path.replace(/\.json$/, ".md")
+                if (mdPath === path) mdPath = path + ".md"
             }
+            if (mdPath === path) return
             var md = _serializeMarkdown()
             var mdB64 = _base64(md)
-            var mdDir = mdPath.substring(0, mdPath.lastIndexOf("/"))
+            var mdLastSlash = mdPath.lastIndexOf("/")
+            var mdDir = mdLastSlash === -1 ? "." : mdPath.substring(0, mdLastSlash)
             var mdCmd = "mkdir -p " + _shellArg(mdDir) + " && " +
                 "printf '%s' '" + mdB64 + "' | base64 -d > " + _shellArg(mdPath + ".tmp") + " && " +
                 "mv -f " + _shellArg(mdPath + ".tmp") + " " + _shellArg(mdPath)
             runShellCmd(mdCmd)
         }
-
-        if (!plasmoid.configuration.migratedToFile)
-            plasmoid.configuration.migratedToFile = true
     }
 
     function addTask(title, priority, toTop) {
