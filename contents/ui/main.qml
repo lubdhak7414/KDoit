@@ -12,7 +12,7 @@ PlasmoidItem {
 
     property var navigationStack: []
     property var currentModel: taskModel
-    property string currentTitle: i18n("My Tasks")
+    property string currentTitle: plasmoid.configuration.listTitle || i18n("K Do it!")
     property string searchText: ""
     property bool searchActive: false
     property var lastDeleted: null
@@ -247,6 +247,10 @@ PlasmoidItem {
         target: plasmoid.configuration
         function onManagedCategoriesChanged() {
             root._onManagedCategoriesChanged()
+        }
+        function onListTitleChanged() {
+            if (!root.isSublistView())
+                root.currentTitle = plasmoid.configuration.listTitle || i18n("K Do it!")
         }
     }
 
