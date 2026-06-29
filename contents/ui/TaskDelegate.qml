@@ -614,10 +614,14 @@ PlasmaComponents.ItemDelegate {
                 spacing: Kirigami.Units.smallSpacing
                 Item { Layout.fillWidth: true }
                 PlasmaComponents.Button {
+                    icon.name: "dialog-cancel"
+                    display: PlasmaComponents.AbstractButton.IconOnly
                     text: i18n("Cancel")
                     onClicked: dateDialog.close()
                 }
                 PlasmaComponents.Button {
+                    icon.name: "dialog-ok"
+                    display: PlasmaComponents.AbstractButton.IconOnly
                     text: i18n("OK")
                     onClicked: {
                         var m = monthSpin.value
@@ -668,10 +672,14 @@ PlasmaComponents.ItemDelegate {
                 spacing: Kirigami.Units.smallSpacing
                 Item { Layout.fillWidth: true }
                 PlasmaComponents.Button {
+                    icon.name: "dialog-cancel"
+                    display: PlasmaComponents.AbstractButton.IconOnly
                     text: i18n("Cancel")
                     onClicked: renameDialog.close()
                 }
                 PlasmaComponents.Button {
+                    icon.name: "dialog-ok"
+                    display: PlasmaComponents.AbstractButton.IconOnly
                     text: i18n("OK")
                     onClicked: {
                         var text = renameField.text.trim()
@@ -724,10 +732,14 @@ PlasmaComponents.ItemDelegate {
                 spacing: Kirigami.Units.smallSpacing
                 Item { Layout.fillWidth: true }
                 PlasmaComponents.Button {
+                    icon.name: "dialog-cancel"
+                    display: PlasmaComponents.AbstractButton.IconOnly
                     text: i18n("Cancel")
                     onClicked: categoryDialog.close()
                 }
                 PlasmaComponents.Button {
+                    icon.name: "dialog-ok"
+                    display: PlasmaComponents.AbstractButton.IconOnly
                     text: i18n("OK")
                     onClicked: {
                         var text = categoryField.text.trim()
