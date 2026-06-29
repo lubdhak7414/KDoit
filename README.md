@@ -4,7 +4,9 @@ A to-do list widget for KDE Plasma 6. Pure QML, no build step.
 
 Nested sublists, priorities, due dates, categories, drag-and-drop reorder, live file sync, Markdown export (Obsidian Tasks compatible), and iCalendar export for calendar apps.
 
-![KDoit task list](assets/preview1.png) ![KDoit with categories](assets/preview2.png)
+<img src="assets/preview1.png" width="49%"/> <img src="assets/preview2.png" width="49%"/>
+
+<sub>Wallpapers: <a href="https://www.reddit.com/r/FrutigerAero/comments/1blbrl9/frutiger_aero_wallpaper_i_whipped_up_in_a_few/">Frutiger Aero</a> · <a href="https://basicappleguy.com/haberdashery/flow">Flow by Basic Apple Guy</a></sub>
 
 ## Why KDoit
 
