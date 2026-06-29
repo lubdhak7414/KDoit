@@ -418,11 +418,11 @@ PlasmoidItem {
                 })
             }
             taskModel.save()
-        } else if (isSublistView()) {
+        } else if (!lastDeleted.type && isSublistView()) {
             sublistModel.insert(Math.min(lastDeleted.index, sublistModel.count),
                 makeSublistRow(lastDeleted.task.uuid || taskModel.newUuid(), lastDeleted.task.title, lastDeleted.task.done))
             syncSublist()
-        } else {
+        } else if (!lastDeleted.type) {
             taskModel.insertTask(lastDeleted.index, lastDeleted.task)
         }
         lastDeleted = null
@@ -853,7 +853,7 @@ PlasmoidItem {
                         root._updateTrigger++
                         root.updateDistinctCategories()
                         if (removed.length > 0) {
-                            lastDeleted = { type: isSublistView() ? "multi-sublist" : "multi", items: removed }
+                            lastDeleted = { type: "multi", items: removed }
                             undoTimer.restart()
                             _undoVisible = true
                         }
