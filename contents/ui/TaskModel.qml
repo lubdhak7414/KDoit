@@ -124,7 +124,14 @@ ListModel {
     // most recent task write (the remote "knew about" it and chose to omit it).
     // Tasks added locally after the remote's last write are kept.
     function loadFromShell(json) {
-        if (!json || json.trim() === "") return
+        if (!json || json.trim() === "") {
+            if (count === 0 && !plasmoid.configuration.migratedToFile) {
+                _addDefaultTasks()
+                save()
+                modelReloaded()
+            }
+            return
+        }
         try {
             var doc = JSON.parse(json)
             var incoming
@@ -134,11 +141,20 @@ ListModel {
 
             var changed = false
 
-            // If remote sent an empty task list, treat it as a full wipe
-            if (incoming.length === 0 && count > 0) {
-                for (var w = count - 1; w >= 0; w--)
-                    remove(w)
-                changed = true
+            if (incoming.length === 0) {
+                if (count > 0) {
+                    // Remote wiped all tasks — propagate deletion
+                    for (var w = count - 1; w >= 0; w--)
+                        remove(w)
+                    save()
+                    modelReloaded()
+                } else if (!plasmoid.configuration.migratedToFile) {
+                    // Empty file on a fresh instance — inject defaults
+                    _addDefaultTasks()
+                    save()
+                    modelReloaded()
+                }
+                return
             }
 
             // Compute the remote's knowledge horizon and UUID set from raw data,
@@ -222,6 +238,35 @@ ListModel {
         } catch(e) {
             console.warn("KDoit loadFromShell:", e)
         }
+    }
+
+    function _addDefaultTasks() {
+        var now = new Date().toISOString()
+        append(normalizeTask({
+            uuid: newUuid(),
+            title: "Getting started — tap 0/2 to see tips",
+            done: false,
+            priority: 0,
+            category: "",
+            createdAt: now,
+            modifiedAt: now,
+            dueDate: "",
+            sublist: [
+                { uuid: newUuid(), title: "Right-click any task to set priority, due date or category", done: false },
+                { uuid: newUuid(), title: "Open ⚙ Settings to configure storage, sync & categories", done: false }
+            ]
+        }))
+        append(normalizeTask({
+            uuid: newUuid(),
+            title: "Report issues on GitHub",
+            done: false,
+            priority: 0,
+            category: "",
+            createdAt: now,
+            modifiedAt: now,
+            dueDate: "",
+            sublist: []
+        }))
     }
 
     function load() {
