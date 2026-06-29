@@ -216,39 +216,27 @@ ListModel {
         var now = new Date().toISOString()
         var today = now.substring(0, 10)
         var tomorrow = new Date(Date.now() + 86400000).toISOString().substring(0, 10)
-        var nextWeek = new Date(Date.now() + 604800000).toISOString().substring(0, 10)
         append(normalizeTask({
             uuid: newUuid(),
-            title: "Procrastinate effectively",
+            title: "Click the subtask count to open a sublist",
             done: false,
-            priority: 2,
-            category: "Work",
+            priority: 1,
+            category: "",
             createdAt: now,
             modifiedAt: now,
-            dueDate: today,
+            dueDate: "",
             sublist: [
-                { uuid: newUuid(), title: "Reorganize desk by color", done: false },
-                { uuid: newUuid(), title: "Research best pen caps for clicking", done: false },
-                { uuid: newUuid(), title: "Write a to-do list about writing to-do lists", done: true }
+                { uuid: newUuid(), title: "Tasks can nest one level deep", done: false },
+                { uuid: newUuid(), title: "Right-click task to date/category/priority", done: false },
+                { uuid: newUuid(), title: "Drag tasks to reorder", done: false }
             ]
         }))
         append(normalizeTask({
             uuid: newUuid(),
-            title: "Remember what I walked into this room for",
+            title: "Right click and configure KDoit",
             done: false,
             priority: 1,
-            category: "Personal",
-            createdAt: now,
-            modifiedAt: now,
-            dueDate: tomorrow,
-            sublist: []
-        }))
-        append(normalizeTask({
-            uuid: newUuid(),
-            title: "Water the fake plant",
-            done: true,
-            priority: 0,
-            category: "Home",
+            category: "",
             createdAt: now,
             modifiedAt: now,
             dueDate: "",
@@ -256,28 +244,48 @@ ListModel {
         }))
         append(normalizeTask({
             uuid: newUuid(),
-            title: "Contemplate the meaning of checkbox liberation",
-            done: false,
-            priority: 1,
-            category: "Education",
-            createdAt: now,
-            modifiedAt: now,
-            dueDate: nextWeek,
-            sublist: [
-                { uuid: newUuid(), title: "Read philosophy of task management", done: false },
-                { uuid: newUuid(), title: "Question whether 'done' is truly ever achieved", done: false }
-            ]
-        }))
-        append(normalizeTask({
-            uuid: newUuid(),
-            title: "Fix that one bug everyone pretends doesn't exist",
+            title: "Fix the bug that only appears on Fridays",
             done: false,
             priority: 2,
             category: "Work",
             createdAt: now,
             modifiedAt: now,
+            dueDate: today,
+            sublist: [
+                { uuid: newUuid(), title: "Reproduce it on a Friday", done: false },
+                { uuid: newUuid(), title: "Convince yourself it's the framework's fault", done: false }
+            ]
+        }))
+        append(normalizeTask({
+            uuid: newUuid(),
+            title: "Reply to that email from three weeks ago",
+            done: false,
+            priority: 1,
+            category: "Personal",
+            createdAt: now,
+            modifiedAt: now,
             dueDate: tomorrow,
-            sublist: []
+            sublist: [
+                { uuid: newUuid(), title: "Open the email", done: false },
+                { uuid: newUuid(), title: "Type 'Hi'", done: false },
+                { uuid: newUuid(), title: "Panic and close the tab", done: false }
+            ]
+        }))
+        append(normalizeTask({
+            uuid: newUuid(),
+            title: "Exit vim",
+            done: false,
+            priority: 0,
+            category: "Education",
+            createdAt: now,
+            modifiedAt: now,
+            dueDate: "",
+            sublist: [
+                { uuid: newUuid(), title: "Try :q", done: true },
+                { uuid: newUuid(), title: "Try :quit", done: true },
+                { uuid: newUuid(), title: "Google 'how to exit vim'", done: false },
+                { uuid: newUuid(), title: "Accept your new life here", done: false }
+            ]
         }))
     }
 
