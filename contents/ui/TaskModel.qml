@@ -358,6 +358,172 @@ ListModel {
         }
     }
 
+    function _parseMarkdown(md) {
+        var tasks = []
+        if (!md || md.trim() === "") return tasks
+        var lines = md.split("\n")
+        var currentTask = null
+        var commentRe = /<!--\s*kdoit-id:([a-fA-F0-9-]+)(?:\s+modifiedAt:([^\s]+))?\s*-->/
+
+        var parseMeta = function(text) {
+            var uuid = null, modifiedAt = null
+            var m = commentRe.exec(text)
+            if (m) {
+                uuid = m[1]
+                modifiedAt = m[2] || null
+                text = text.replace(commentRe, "").trim()
+            }
+            var category = ""
+            var catMatch = /(?:^|\s)#([^\s#]+(?:\s+[^\s#]+)*)$/.exec(text)
+            if (catMatch) {
+                category = catMatch[1]
+                text = text.substring(0, catMatch.index).trim()
+            }
+            var dueDate = ""
+            var calIdx = text.indexOf("📅")
+            if (calIdx !== -1) {
+                var dateMatch = /\d{4}-\d{2}-\d{2}/.exec(text.substring(calIdx))
+                if (dateMatch) {
+                    dueDate = dateMatch[0]
+                    text = text.substring(0, calIdx).trim()
+                }
+            }
+            var priority = 1
+            var highIdx = text.lastIndexOf("⏫")
+            var medIdx  = text.lastIndexOf("🔼")
+            var lowIdx  = text.lastIndexOf("🔽")
+            var maxIdx = Math.max(highIdx, medIdx, lowIdx)
+            if (maxIdx !== -1) {
+                if (maxIdx === highIdx) priority = 2
+                else if (maxIdx === medIdx) priority = 1
+                else priority = 0
+                text = text.substring(0, maxIdx).trim()
+            }
+            return { title: text, priority: priority, dueDate: dueDate, category: category, uuid: uuid, modifiedAt: modifiedAt }
+        }
+
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i]
+            var subMatch = /^[ \t]{2,}- \[([ xX])\]\s+(.*)$/.exec(line)
+            if (subMatch && currentTask) {
+                var subText = subMatch[2]
+                var subDone = subMatch[1].toLowerCase() === "x"
+                var subCommentMatch = commentRe.exec(subText)
+                var subUuid = null
+                if (subCommentMatch) {
+                    subUuid = subCommentMatch[1]
+                    subText = subText.replace(commentRe, "").trim()
+                }
+                currentTask.sublist.push({ uuid: subUuid || newUuid(), title: subText.trim(), done: subDone })
+                continue
+            }
+            var topMatch = /^- \[([ xX])\]\s+(.*)$/.exec(line)
+            if (topMatch) {
+                if (currentTask) tasks.push(currentTask)
+                var done = topMatch[1].toLowerCase() === "x"
+                var meta = parseMeta(topMatch[2])
+                currentTask = {
+                    uuid: meta.uuid,
+                    title: meta.title,
+                    done: done,
+                    priority: meta.priority,
+                    category: meta.category,
+                    dueDate: meta.dueDate,
+                    modifiedAt: meta.modifiedAt,
+                    sublist: []
+                }
+            }
+        }
+        if (currentTask) tasks.push(currentTask)
+        return tasks
+    }
+
+    function mergeImportedTasks(parsedTasks) {
+        var imported = 0
+        var updated = 0
+        var now = new Date().toISOString()
+        var addToTop = plasmoid.configuration.addToTop
+        var byUuid = {}
+        for (var i = 0; i < count; i++) {
+            var cur = get(i)
+            if (cur.uuid) byUuid[cur.uuid] = i
+        }
+        var seenUuids = {}
+        var deduped = []
+        for (var d = parsedTasks.length - 1; d >= 0; d--) {
+            var pt = parsedTasks[d]
+            if (pt.uuid && seenUuids[pt.uuid]) continue
+            if (pt.uuid) seenUuids[pt.uuid] = true
+            deduped.unshift(pt)
+        }
+        for (var j = 0; j < deduped.length; j++) {
+            var parsed = deduped[j]
+            if (parsed.uuid && byUuid[parsed.uuid] !== undefined) {
+                var idx = byUuid[parsed.uuid]
+                var existing = get(idx)
+                if (parsed.modifiedAt && parsed.modifiedAt > existing.modifiedAt) {
+                    setProperty(idx, "title", parsed.title)
+                    setProperty(idx, "done", parsed.done)
+                    setProperty(idx, "priority", parsed.priority)
+                    setProperty(idx, "category", parsed.category)
+                    setProperty(idx, "dueDate", parsed.dueDate)
+                    setProperty(idx, "modifiedAt", parsed.modifiedAt)
+                    var sub = existing.sublist
+                    if (sub && typeof sub.clear === "function") {
+                        sub.clear()
+                        for (var k = 0; k < parsed.sublist.length; k++)
+                            sub.append(parsed.sublist[k])
+                    } else {
+                        setProperty(idx, "sublist", parsed.sublist)
+                    }
+                    updated++
+                }
+            } else {
+                // No UUID match — skip if a task with the same title already exists
+                // (prevents duplication when importing a file without UUID comments)
+                var existsByTitle = false
+                for (var ti = 0; ti < count; ti++) {
+                    if (get(ti).title === parsed.title) { existsByTitle = true; break }
+                }
+                if (!existsByTitle) {
+                    var newTask = normalizeTask({
+                        uuid: parsed.uuid || newUuid(),
+                        title: parsed.title,
+                        done: parsed.done,
+                        priority: parsed.priority,
+                        category: parsed.category,
+                        dueDate: parsed.dueDate,
+                        sublist: parsed.sublist,
+                        createdAt: now,
+                        modifiedAt: parsed.modifiedAt || now
+                    })
+                    if (addToTop) {
+                        insert(0, newTask)
+                        for (var uuid in byUuid) byUuid[uuid] = byUuid[uuid] + 1
+                    } else {
+                        append(newTask)
+                    }
+                    imported++
+                }
+            }
+        }
+        return { imported: imported, updated: updated }
+    }
+
+    function importFromMarkdown(mdText) {
+        try {
+            if (!mdText || mdText.trim() === "") return { imported: 0, updated: 0 }
+            var parsed = _parseMarkdown(mdText)
+            var result = mergeImportedTasks(parsed)
+            if (result.imported > 0 || result.updated > 0)
+                _saveJsonOnly()
+            return result
+        } catch(e) {
+            console.error("KDoit markdown import failed:", e)
+            return { imported: 0, updated: 0, error: e.toString() }
+        }
+    }
+
     function addTask(title, priority, toTop) {
         if (title.trim() === "") return
         var task = {
