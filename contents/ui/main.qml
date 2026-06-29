@@ -31,6 +31,7 @@ PlasmoidItem {
     property string _lastMtime: "0"
     property string _activeSublistUuid: ""
     property bool _undoVisible: false
+    property bool _skipNextPoll: false
 
     function toggleSelect(index) {
         if (isSublistView())
@@ -154,8 +155,7 @@ PlasmoidItem {
         connectedSources: []
         onNewData: function(source, data) {
             disconnectSource(source)
-            if (data["exit code"] === 0)
-                taskModel.loadFromShell(data.stdout)
+            taskModel.loadFromShell(data["exit code"] === 0 ? data.stdout : "")
         }
         function run(path) { connectSource("cat '" + path.replace(/'/g, "'\\''") + "'") }
     }
@@ -166,6 +166,10 @@ PlasmoidItem {
         connectedSources: []
         onNewData: function(source, data) {
             disconnectSource(source)
+            if (root._skipNextPoll) {
+                root._skipNextPoll = false
+                return
+            }
             if (data["exit code"] === 0) {
                 var mtime = data.stdout.trim()
                 if (mtime !== root._lastMtime) {
@@ -176,6 +180,26 @@ PlasmoidItem {
             }
         }
         function check(path) { connectSource("stat -c %Y '" + path.replace(/'/g, "'\\''") + "'") }
+    }
+
+    Plasma5Support.DataSource {
+        id: mdReader
+        engine: "executable"
+        connectedSources: []
+        onNewData: function(source, data) {
+            disconnectSource(source)
+            if (data["exit code"] === 0) {
+                var result = taskModel.importFromMarkdown(data.stdout)
+                if (result.imported > 0 || result.updated > 0) {
+                    root._updateTrigger++
+                    root.updateDistinctCategories()
+                    root._skipNextPoll = true
+                }
+            } else {
+                console.warn("KDoit markdown import: file read failed")
+            }
+        }
+        function run(path) { connectSource("cat '" + path.replace(/'/g, "'\\''") + "'") }
     }
 
     Timer {
