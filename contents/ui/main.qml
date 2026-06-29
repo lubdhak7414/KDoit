@@ -573,10 +573,12 @@ PlasmoidItem {
                     visible: root.distinctCategories.length > 0 && !root.isSublistView()
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 6
                     model: [i18n("All")].concat(root.distinctCategories)
-                    currentIndex: {
-                        if (root.categoryFilter === "") return 0
-                        var idx = root.distinctCategories.indexOf(root.categoryFilter)
-                        return idx >= 0 ? idx + 1 : 0
+                    Binding on currentIndex {
+                        value: {
+                            if (root.categoryFilter === "") return 0
+                            var idx = root.distinctCategories.indexOf(root.categoryFilter)
+                            return idx >= 0 ? idx + 1 : 0
+                        }
                     }
                     onActivated: function(index) {
                         if (index === 0)
@@ -591,6 +593,7 @@ PlasmoidItem {
                     flat: true
                     display: PlasmaComponents.AbstractButton.IconOnly
                     text: i18n("Sort")
+                    visible: !root.isSublistView()
                     onClicked: sortMenu.popup()
 
                     Controls.Menu {
