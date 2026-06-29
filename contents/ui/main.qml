@@ -482,15 +482,6 @@ PlasmoidItem {
         plasmoid.configuration.managedCategories = JSON.stringify(cats)
     }
 
-    function removeManagedCategory(name) {
-        var cats = _parseManagedCategories()
-        var lower = name.toLowerCase()
-        for (var i = cats.length - 1; i >= 0; i--) {
-            if (cats[i].toLowerCase() === lower) { cats.splice(i, 1); break }
-        }
-        plasmoid.configuration.managedCategories = JSON.stringify(cats)
-    }
-
     function _onManagedCategoriesChanged() {
         var newCats = _parseManagedCategories()
         if (!_categoriesInitialized) {
