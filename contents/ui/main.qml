@@ -335,6 +335,7 @@ PlasmoidItem {
                 sublistModel.insert(0, makeSublistRow(taskModel.newUuid(), title, false))
             else
                 sublistModel.append(makeSublistRow(taskModel.newUuid(), title, false))
+            _updateTrigger++
             syncSublist()
         } else {
             taskModel.addTask(title, plasmoid.configuration.defaultPriority, plasmoid.configuration.addToTop)
@@ -747,7 +748,9 @@ PlasmoidItem {
                 id: undoMessage
                 Layout.fillWidth: true
                 visible: root._undoVisible
-                text: i18n("Task deleted")
+                text: root.lastDeleted && root.lastDeleted.type === "multi"
+                      ? i18np("1 task deleted", "%1 tasks deleted", root.lastDeleted.items.length)
+                      : i18n("Task deleted")
                 type: Kirigami.MessageType.Information
                 actions: [
                     Kirigami.Action {
