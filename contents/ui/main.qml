@@ -175,11 +175,17 @@ PlasmoidItem {
             disconnectSource(source)
             if (root._skipNextPoll) {
                 root._skipNextPoll = false
-                // Record the current mtime so the next poll doesn't treat it as
-                // a stale-vs-new mismatch and trigger a redundant file read.
-                if (data["exit code"] === 0)
-                    root._lastMtime = data.stdout.trim()
-                return
+                if (data["exit code"] === 0) {
+                    var mtime = data.stdout.trim()
+                    if (mtime === root._lastMtime) {
+                        // Our own save — skip the redundant read.
+                        return
+                    }
+                    // Different mtime — another writer was active, fall through
+                    // to read the remote changes.
+                } else {
+                    return
+                }
             }
             if (data["exit code"] === 0) {
                 var mtime = data.stdout.trim()
@@ -365,8 +371,9 @@ PlasmoidItem {
         if (isSublistView()) {
             var st = sublistModel.get(index)
             lastDeleted = {
+                type: "single-sublist",
                 index: index,
-                task: { uuid: st.uuid, title: st.title, done: st.done, priority: 0, category: "", createdAt: "", dueDate: "", sublist: [] }
+                task: { uuid: st.uuid, title: st.title, done: st.done }
             }
             sublistModel.remove(index)
             syncSublist()
@@ -404,6 +411,10 @@ PlasmoidItem {
                     makeSublistRow(st.uuid || taskModel.newUuid(), st.title, st.done))
             }
             syncSublist()
+        } else if (lastDeleted.type === "single-sublist") {
+            sublistModel.insert(Math.min(lastDeleted.index, sublistModel.count),
+                makeSublistRow(lastDeleted.task.uuid || taskModel.newUuid(), lastDeleted.task.title, lastDeleted.task.done))
+            syncSublist()
         } else if (lastDeleted.type === "multi") {
             var items = lastDeleted.items.slice().sort(function(a, b) { return a.index - b.index })
             for (var i = 0; i < items.length; i++) {
@@ -418,10 +429,6 @@ PlasmoidItem {
                 })
             }
             taskModel.save()
-        } else if (!lastDeleted.type && isSublistView()) {
-            sublistModel.insert(Math.min(lastDeleted.index, sublistModel.count),
-                makeSublistRow(lastDeleted.task.uuid || taskModel.newUuid(), lastDeleted.task.title, lastDeleted.task.done))
-            syncSublist()
         } else if (!lastDeleted.type) {
             taskModel.insertTask(lastDeleted.index, lastDeleted.task)
         }
