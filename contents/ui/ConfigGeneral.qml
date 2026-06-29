@@ -30,6 +30,8 @@ Kirigami.Page {
     property bool cfg_markdownExportDefault: false
     property string cfg_markdownPath
     property string cfg_markdownPathDefault: ""
+    property string cfg_listTitle
+    property string cfg_listTitleDefault: "K Do it!"
     property var _parsedManagedCategories: {
         try {
             return JSON.parse(root.cfg_managedCategories || '["Work","Personal","Education"]')
@@ -42,6 +44,19 @@ Kirigami.Page {
 
     Kirigami.FormLayout {
         anchors.fill: parent
+
+        PlasmaComponents.TextField {
+            id: titleField
+            Kirigami.FormData.label: i18n("Widget title:")
+            implicitWidth: Kirigami.Units.gridUnit * 20
+            placeholderText: i18n("My Tasks")
+            Component.onCompleted: text = root.cfg_listTitle
+            onEditingFinished: root.cfg_listTitle = text.trim() || root.cfg_listTitleDefault
+        }
+
+        Kirigami.Separator {
+            Kirigami.FormData.isSection: true
+        }
 
         PlasmaComponents.TextField {
             id: pathField

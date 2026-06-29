@@ -53,5 +53,9 @@
             <label>Absolute path to the Markdown export file</label>
             <default></default>
         </entry>
+        <entry name="listTitle" type="String">
+            <label>Header title shown above the task list</label>
+            <default>K Do it!</default>
+        </entry>
     </group>
 </kcfg>
