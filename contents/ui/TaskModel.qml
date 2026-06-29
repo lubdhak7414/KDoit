@@ -242,29 +242,69 @@ ListModel {
 
     function _addDefaultTasks() {
         var now = new Date().toISOString()
+        var today = now.substring(0, 10)
+        var tomorrow = new Date(Date.now() + 86400000).toISOString().substring(0, 10)
+        var nextWeek = new Date(Date.now() + 604800000).toISOString().substring(0, 10)
         append(normalizeTask({
             uuid: newUuid(),
-            title: "Getting started -tap 0/2 to see tips",
+            title: "Procrastinate effectively",
             done: false,
-            priority: 0,
-            category: "",
+            priority: 2,
+            category: "Work",
             createdAt: now,
             modifiedAt: now,
-            dueDate: "",
+            dueDate: today,
             sublist: [
-                { uuid: newUuid(), title: "Right-click any task to set priority, due date or category", done: false },
-                { uuid: newUuid(), title: "Open ⚙ Settings to configure storage, sync & categories", done: false }
+                { uuid: newUuid(), title: "Reorganize desk by color", done: false },
+                { uuid: newUuid(), title: "Research best pen caps for clicking", done: false },
+                { uuid: newUuid(), title: "Write a to-do list about writing to-do lists", done: true }
             ]
         }))
         append(normalizeTask({
             uuid: newUuid(),
-            title: "Report issues on GitHub",
+            title: "Remember what I walked into this room for",
             done: false,
+            priority: 1,
+            category: "Personal",
+            createdAt: now,
+            modifiedAt: now,
+            dueDate: tomorrow,
+            sublist: []
+        }))
+        append(normalizeTask({
+            uuid: newUuid(),
+            title: "Water the fake plant",
+            done: true,
             priority: 0,
-            category: "",
+            category: "Home",
             createdAt: now,
             modifiedAt: now,
             dueDate: "",
+            sublist: []
+        }))
+        append(normalizeTask({
+            uuid: newUuid(),
+            title: "Contemplate the meaning of checkbox liberation",
+            done: false,
+            priority: 1,
+            category: "Education",
+            createdAt: now,
+            modifiedAt: now,
+            dueDate: nextWeek,
+            sublist: [
+                { uuid: newUuid(), title: "Read philosophy of task management", done: false },
+                { uuid: newUuid(), title: "Question whether 'done' is truly ever achieved", done: false }
+            ]
+        }))
+        append(normalizeTask({
+            uuid: newUuid(),
+            title: "Fix that one bug everyone pretends doesn't exist",
+            done: false,
+            priority: 2,
+            category: "Work",
+            createdAt: now,
+            modifiedAt: now,
+            dueDate: tomorrow,
             sublist: []
         }))
     }
