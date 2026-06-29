@@ -16,7 +16,6 @@ PlasmoidItem {
     property string searchText: ""
     property bool searchActive: false
     property var lastDeleted: null
-    property var activeSublistTask: null
     property int _updateTrigger: 0
 
     property string categoryFilter: ""
@@ -232,8 +231,8 @@ PlasmoidItem {
                 if (newIdx < 0) {
                     root.goBack()
                 } else {
-                    root.activeSublistTask = newIdx
                     var task = taskModel.get(newIdx)
+                    root.currentTitle = task.title
                     var sub = taskModel.normalizeSublist(task.sublist)
                     sublistModel.clear()
                     for (var i = 0; i < sub.length; i++)
@@ -277,7 +276,6 @@ PlasmoidItem {
             if (taskModel.get(n).uuid === _activeSublistUuid) { syncIdx = n; break }
         }
         if (syncIdx < 0) return
-        activeSublistTask = syncIdx
         var arr = []
         for (var i = 0; i < sublistModel.count; i++) {
             var t = sublistModel.get(i)
@@ -301,7 +299,6 @@ PlasmoidItem {
         navigationStackChanged()
         categoryFilter = ""
         var task = taskModel.get(taskIndex)
-        activeSublistTask = taskIndex
         _activeSublistUuid = task.uuid
         sublistModel.clear()
         var sub = taskModel.normalizeSublist(task.sublist)
@@ -318,7 +315,6 @@ PlasmoidItem {
         clearSelection()
         var entry = navigationStack.pop()
         navigationStackChanged()
-        activeSublistTask = null
         _activeSublistUuid = ""
         currentModel = taskModel
         currentTitle = entry.title
