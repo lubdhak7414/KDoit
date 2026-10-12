@@ -32,6 +32,8 @@ Kirigami.Page {
     property string cfg_markdownPathDefault: ""
     property bool cfg_enableIcsExport
     property bool cfg_enableIcsExportDefault: false
+    property int cfg_opacityPercent
+    property int cfg_opacityPercentDefault: 0
     property string cfg_listTitle
     property string cfg_listTitleDefault: "K Do it!"
     property var _parsedManagedCategories: {
@@ -47,6 +49,17 @@ Kirigami.Page {
 
     Kirigami.FormLayout {
         anchors.fill: parent
+
+        PlasmaComponents.Slider {
+            id: opacitySlider
+            Kirigami.FormData.label: i18n("Background card:")
+            from: 0
+            to: 100
+            stepSize: 5
+            value: root.cfg_opacityPercent
+            Layout.fillWidth: true
+            onMoved: root.cfg_opacityPercent = value
+        }
 
         PlasmaComponents.TextField {
             id: titleField

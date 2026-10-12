@@ -11,6 +11,23 @@ PlasmoidItem {
     id: root
 
     property var navigationStack: []
+    // Draw no background of our own; the backgroundCard below replaces it so
+    // its strength is controlled entirely by the opacityPercent setting
+    Plasmoid.backgroundHints: "NoBackground"
+    // Optional translucent card behind the list, drawn in the theme's own
+    // background colour so it follows the colour scheme (0 = fully transparent)
+    Rectangle {
+        id: backgroundCard
+        z: -1
+        anchors.fill: parent
+        anchors.margins: Kirigami.Units.smallSpacing
+        radius: Kirigami.Units.smallSpacing
+        color: Qt.rgba(Kirigami.Theme.backgroundColor.r,
+                       Kirigami.Theme.backgroundColor.g,
+                       Kirigami.Theme.backgroundColor.b,
+                       plasmoid.configuration.opacityPercent / 100)
+    }
+
     property var currentModel: taskModel
     property string currentTitle: plasmoid.configuration.listTitle || i18n("K Do it!")
     property string searchText: ""
