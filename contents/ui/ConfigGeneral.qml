@@ -32,6 +32,8 @@ Kirigami.Page {
     property string cfg_markdownPathDefault: ""
     property bool cfg_enableIcsExport
     property bool cfg_enableIcsExportDefault: false
+    property string cfg_panelInputMode
+    property string cfg_panelInputModeDefault: "auto"
     property string cfg_listTitle
     property string cfg_listTitleDefault: "K Do it!"
     property var _parsedManagedCategories: {
@@ -129,6 +131,33 @@ Kirigami.Page {
             text: i18n("Show Today / Tomorrow / Yesterday")
             Binding on checked { value: root.cfg_verboseDates }
             onToggled: root.cfg_verboseDates = checked
+        }
+
+        Kirigami.Separator {
+            Kirigami.FormData.isSection: true
+        }
+
+        PlasmaComponents.CheckBox {
+            id: panelInputModeCheck
+            Kirigami.FormData.label: i18n("Text input:")
+            text: i18n("Use editor windows for text input")
+            tristate: true
+            Component.onCompleted: checkState = root.cfg_panelInputMode === "window" ? Qt.Checked
+                                              : root.cfg_panelInputMode === "inline" ? Qt.Unchecked
+                                              : Qt.PartiallyChecked
+            onCheckStateChanged: {
+                root.cfg_panelInputMode = checkState === Qt.Checked ? "window"
+                                        : checkState === Qt.Unchecked ? "inline" : "auto"
+            }
+        }
+
+        PlasmaComponents.Label {
+            Kirigami.FormData.label: ""
+            text: i18n("Half-checked = Auto: editor windows in panels, inline fields on the desktop. Panel surfaces cannot receive keyboard focus on Wayland, so inline text fields do not work there.")
+            font.pointSize: Kirigami.Theme.smallFont.pointSize
+            color: Kirigami.Theme.disabledTextColor
+            wrapMode: Text.WordWrap
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 20
         }
 
         Kirigami.Separator {

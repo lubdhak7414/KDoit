@@ -61,5 +61,9 @@
             <label>Export tasks to .ics calendar file</label>
             <default>false</default>
         </entry>
+        <entry name="panelInputMode" type="String">
+            <label>Text input mode: auto (windows in panel, inline elsewhere), window (always use editor windows), inline (always use inline fields)</label>
+            <default>auto</default>
+        </entry>
     </group>
 </kcfg>

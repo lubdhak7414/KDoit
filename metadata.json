@@ -3,7 +3,7 @@
     "Id": "com.github.lubdhak7414.kdoit",
     "Name": "KDoit",
     "Description": "Lightweight to-do widget. Nested sublists, priorities, due dates, Markdown export (Obsidian Tasks compatible), iCalendar export, and UUID-based sync across machines.",
-    "Version": "1.0.0",
+    "Version": "1.2.0",
     "Category": "Productivity",
     "Icon": "view-task",
     "Website": "https://github.com/lubdhak7414/KDoit",
