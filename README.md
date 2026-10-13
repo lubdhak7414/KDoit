@@ -39,6 +39,7 @@ Requires KDE Plasma 6 (Kirigami and Qt 6 are included in any standard Plasma 6 i
 - Multi-select: Ctrl+click toggle, Shift+click range, bulk delete
 - Undo on delete — 5-second window
 - Right-click any task for rename, date, category, priority
+- **Panel note (Wayland):** a panel surface cannot receive keyboard focus, so inline text fields are disabled in panels. Use the header **Edit todo** / **Filter** buttons instead — they open real focused windows for adding, renaming, and filtering tasks. On the desktop everything stays inline. This follows the *Text input* setting (below): Auto = windows in panels / inline on desktop; can be forced On or Off manually.
 
 **Data and sync**
 - Dual-write: JSON file + KConfig mirror for instant startup
@@ -55,6 +56,7 @@ Right-click the widget → Configure:
 | Setting | Default | Notes |
 |---------|---------|-------|
 | Storage path | `~/.local/share/kdoit/tasks.json` | Point multiple machines at the same synced folder |
+| Text input | Auto | Auto: editor windows in panels, inline fields on desktop. On = always use editor windows, Off = always inline |
 | Default priority | Medium | Priority assigned to new tasks |
 | Hide completed | Off | Collapses done tasks from view |
 | Add to top | Off | Inserts new tasks at the top instead of the bottom |

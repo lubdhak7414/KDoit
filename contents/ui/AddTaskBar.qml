@@ -18,6 +18,10 @@ RowLayout {
         }
     }
 
+    function focusInput() {
+        field.forceActiveFocus()
+    }
+
     PlasmaComponents.TextField {
         id: field
         Layout.fillWidth: true

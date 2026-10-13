@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as Controls
 import org.kde.plasma.plasmoid
+import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.components 3.0 as PlasmaComponents
 import org.kde.plasma.extras 2.0 as PlasmaExtras
 import org.kde.plasma.plasma5support as Plasma5Support
@@ -31,6 +32,62 @@ PlasmoidItem {
     property string _activeSublistUuid: ""
     property bool _undoVisible: false
     property bool _skipNextPoll: false
+
+    // On Wayland a panel surface can never receive keyboard focus, so text
+    // fields embedded in a panel are dead (keystrokes go to the previously
+    // focused window). In panels we therefore hide the inline input bar and
+    // filter field, and open real top-level windows (which do get keyboard
+    // focus) for adding/editing/filtering instead.
+    readonly property bool inPanel: plasmoid.location === PlasmaCore.Types.TopEdge
+                                 || plasmoid.location === PlasmaCore.Types.BottomEdge
+                                 || plasmoid.location === PlasmaCore.Types.LeftEdge
+                                 || plasmoid.location === PlasmaCore.Types.RightEdge
+
+    // Effective input mode: "auto" follows the location (windows in panel,
+    // inline on desktop); "window"/"inline" force one behavior manually.
+    readonly property bool useInputWindows: {
+        var m = plasmoid.configuration.panelInputMode
+        if (m === "window") return true
+        if (m === "inline") return false
+        return root.inPanel
+    }
+
+    onUseInputWindowsChanged: {
+        if (!useInputWindows) {
+            editWindow.close()
+            filterWindow.close()
+        }
+    }
+
+    function openEditWindow() {
+        editWindow.visible = true
+        editWindow.raise()
+        editWindow.requestActivate()
+        editFocusTimer.restart()
+    }
+
+    function openFilterWindow() {
+        filterField.text = root.searchText
+        filterWindow.visible = true
+        filterWindow.raise()
+        filterWindow.requestActivate()
+        filterFocusTimer.restart()
+    }
+
+    Timer {
+        id: editFocusTimer
+        interval: 150
+        onTriggered: winAddBar.focusInput()
+    }
+
+    Timer {
+        id: filterFocusTimer
+        interval: 150
+        onTriggered: {
+            filterField.forceActiveFocus()
+            filterField.selectAll()
+        }
+    }
 
     function toggleSelect(index) {
         var copy = Object.assign({}, selectedIndices)
@@ -245,6 +302,9 @@ PlasmoidItem {
             taskList.currentDragActive = false
             taskList.dragSourceIndex = -1
             taskList.dropTargetIndex = -1
+            winList.currentDragActive = false
+            winList.dragSourceIndex = -1
+            winList.dropTargetIndex = -1
             // If the user is viewing a sublist, refresh it from the updated task model
             // so remote sublist changes don't get overwritten by the stale snapshot.
             // Use UUID lookup -deletion propagation may have shifted model indices.
@@ -636,6 +696,19 @@ PlasmoidItem {
                 }
 
                 PlasmaComponents.Button {
+                    icon.name: "document-edit-symbolic"
+                    flat: true
+                    display: PlasmaComponents.AbstractButton.IconOnly
+                    text: i18n("Edit todo")
+                    visible: root.useInputWindows
+                    onClicked: root.openEditWindow()
+
+                    Controls.ToolTip {
+                        text: i18n("Open task editor")
+                    }
+                }
+
+                PlasmaComponents.Button {
                     icon.name: "view-sort-symbolic"
                     flat: true
                     display: PlasmaComponents.AbstractButton.IconOnly
@@ -672,16 +745,22 @@ PlasmoidItem {
                 PlasmaComponents.Button {
                     icon.name: "view-filter-symbolic"
                     flat: true
-                    checkable: true
+                    checkable: !root.useInputWindows
                     display: PlasmaComponents.AbstractButton.IconOnly
                     text: i18n("Filter")
                     Binding on checked {
-                        value: root.searchActive
+                        value: root.useInputWindows ? root.searchText.length > 0 : root.searchActive
                     }
                     onToggled: {
+                        if (root.useInputWindows)
+                            return
                         root.searchActive = checked
                         if (!checked)
                             searchField.text = ""
+                    }
+                    onClicked: {
+                        if (root.useInputWindows)
+                            root.openFilterWindow()
                     }
                 }
 
@@ -698,7 +777,7 @@ PlasmoidItem {
             PlasmaComponents.TextField {
                 id: searchField
                 Layout.fillWidth: true
-                visible: root.searchActive
+                visible: root.searchActive && !root.useInputWindows
                 placeholderText: i18n("Filter tasks...")
                 onTextChanged: root.searchText = text
                 Keys.onEscapePressed: {
@@ -811,6 +890,7 @@ PlasmoidItem {
             AddTaskBar {
                 Layout.fillWidth: true
                 Layout.topMargin: Kirigami.Units.largeSpacing
+                visible: !root.useInputWindows
                 onAddRequested: function (title) {
                     root.addToCurrent(title)
                 }
@@ -897,6 +977,162 @@ PlasmoidItem {
                     return p
                 }
                 wrapMode: Text.WrapAnywhere
+            }
+        }
+    }
+
+    // --- Panel editing windows (real top-level windows: get keyboard focus) ---
+
+    Controls.ApplicationWindow {
+        id: editWindow
+        visible: false
+        title: i18n("Edit todo")
+        minimumWidth: Kirigami.Units.gridUnit * 16
+        minimumHeight: Kirigami.Units.gridUnit * 18
+        width: Kirigami.Units.gridUnit * 20
+        height: Kirigami.Units.gridUnit * 26
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: Kirigami.Units.smallSpacing
+            spacing: Kirigami.Units.smallSpacing
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+
+                PlasmaComponents.Button {
+                    icon.name: "go-previous-symbolic"
+                    flat: true
+                    display: PlasmaComponents.AbstractButton.IconOnly
+                    text: i18n("Back")
+                    visible: root.navigationStack.length > 0
+                    onClicked: root.goBack()
+                }
+
+                PlasmaExtras.Heading {
+                    level: 3
+                    text: root.currentTitle
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
+            }
+
+            Controls.ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: root.visibleCount > 0
+                clip: true
+                contentWidth: availableWidth
+
+                ListView {
+                    id: winList
+                    model: root.currentModel
+                    spacing: 0
+
+                    property bool currentDragActive: false
+                    property int dropTargetIndex: -1
+                    property int dragSourceIndex: -1
+                    property bool isDropping: false
+
+                    signal resetAllTransforms()
+
+                    interactive: !currentDragActive
+
+                    displaced: Transition {
+                        enabled: !winList.isDropping
+                        NumberAnimation { property: "y"; duration: 150; easing.type: Easing.OutCubic }
+                    }
+
+                    delegate: TaskDelegate {
+                        matched: root.matchesFilter(title, done, category || "")
+                        dragEnabled: !root.isFiltering && !root.isSublistView()
+                        isSublistItem: root.isSublistView()
+                        onTaskDeleted: root.deleteCurrent(index)
+                        onDrillIntoSublist: function (taskIndex) {
+                            if (!root.isSublistView())
+                                root.enterSublist(taskIndex)
+                        }
+                        onTaskChanged: {
+                            root._updateTrigger++
+                            root.updateDistinctCategories()
+                            if (root.isSublistView())
+                                root.syncSublist()
+                            else
+                                taskModel.save()
+                        }
+                        onDragStarted: function (idx) {
+                            winList.dragSourceIndex = idx
+                            winList.dropTargetIndex = idx
+                            winList.currentDragActive = true
+                        }
+                        onDropTargetChanged: function (idx) {
+                            winList.dropTargetIndex = idx
+                        }
+                        onDropping: {
+                            winList.isDropping = true
+                            winList.resetAllTransforms()
+                            winDropResetTimer.restart()
+                        }
+                    }
+
+                    Timer {
+                        id: winDropResetTimer
+                        interval: 50
+                        onTriggered: {
+                            winList.isDropping = false
+                            winList.currentDragActive = false
+                            winList.dragSourceIndex = -1
+                            winList.dropTargetIndex = -1
+                        }
+                    }
+                }
+            }
+
+            EmptyState {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: root.visibleCount === 0
+                message: root.currentModel.count > 0
+                    ? (root.searchText.length > 0 || root.categoryFilter !== ""
+                        ? i18n("No tasks match your search")
+                        : i18n("All done! Nice work."))
+                    : i18n("Add your first task below")
+                iconSource: root.currentModel.count > 0 && (root.searchText.length > 0 || root.categoryFilter !== "")
+                    ? "view-filter-symbolic"
+                    : "view-task"
+            }
+
+            AddTaskBar {
+                id: winAddBar
+                Layout.fillWidth: true
+                Layout.topMargin: Kirigami.Units.largeSpacing
+                onAddRequested: function (title) {
+                    root.addToCurrent(title)
+                }
+            }
+        }
+    }
+
+    Controls.ApplicationWindow {
+        id: filterWindow
+        visible: false
+        title: i18n("Filter tasks")
+        minimumWidth: Kirigami.Units.gridUnit * 14
+        width: Kirigami.Units.gridUnit * 16
+        height: filterField.implicitHeight + Kirigami.Units.smallSpacing * 4
+        maximumHeight: height
+
+        PlasmaComponents.TextField {
+            id: filterField
+            anchors.fill: parent
+            anchors.margins: Kirigami.Units.smallSpacing * 2
+            placeholderText: i18n("Filter tasks...")
+            onTextChanged: root.searchText = text
+            onAccepted: filterWindow.close()
+            Keys.onEscapePressed: {
+                text = ""
+                filterWindow.close()
             }
         }
     }
