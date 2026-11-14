@@ -27,10 +27,10 @@ PlasmoidItem {
 
     property var selectedIndices: ({})
     property int _lastClickedIndex: -1
-    property string _lastMtime: "0"
     property string _activeSublistUuid: ""
     property bool _undoVisible: false
-    property bool _skipNextPoll: false
+    property string _writerSource: ""
+    property string _readerSource: ""
 
     function toggleSelect(index) {
         var copy = Object.assign({}, selectedIndices)
@@ -150,10 +150,30 @@ PlasmoidItem {
         connectedSources: []
         onNewData: function(source, data) {
             disconnectSource(source)
-            if (data["exit code"] !== 0)
-                console.warn("KDoit save failed:", data.stderr || data.stdout)
+            if (source === root._writerSource) {
+                writeWatchdog.stop()
+                root._writerSource = ""
+            }
+            taskModel.shellResult(source, data["exit code"], data.stdout || "", data.stderr || "")
         }
-        function run(cmd) { connectSource(cmd) }
+        function run(cmd) {
+            root._writerSource = cmd
+            writeWatchdog.restart()
+            connectSource(cmd)
+        }
+    }
+
+    // A ListModel cannot hold child objects, so the write watchdog lives here.
+    Timer {
+        id: writeWatchdog
+        interval: 15000
+        onTriggered: {
+            if (root._writerSource !== "") {
+                writer.disconnectSource(root._writerSource)
+                root._writerSource = ""
+            }
+            taskModel.shellTimeout()
+        }
     }
 
     Plasma5Support.DataSource {
@@ -162,9 +182,30 @@ PlasmoidItem {
         connectedSources: []
         onNewData: function(source, data) {
             disconnectSource(source)
-            taskModel.loadFromShell(data["exit code"] === 0 ? data.stdout : "")
+            if (source === root._readerSource) {
+                readWatchdog.stop()
+                root._readerSource = ""
+            }
+            taskModel.loadFromShell(data["exit code"], data.stdout || "", source)
         }
-        function run(path) { connectSource("cat '" + path.replace(/'/g, "'\\''") + "'") }
+        function run(path) {
+            var cmd = taskModel._readCmd(path)
+            root._readerSource = cmd
+            readWatchdog.restart()
+            connectSource(cmd)
+        }
+    }
+
+    Timer {
+        id: readWatchdog
+        interval: 15000
+        onTriggered: {
+            if (root._readerSource !== "") {
+                fileReader.disconnectSource(root._readerSource)
+                root._readerSource = ""
+            }
+            taskModel.readTimeout()
+        }
     }
 
     Plasma5Support.DataSource {
@@ -173,30 +214,9 @@ PlasmoidItem {
         connectedSources: []
         onNewData: function(source, data) {
             disconnectSource(source)
-            if (root._skipNextPoll) {
-                root._skipNextPoll = false
-                if (data["exit code"] === 0) {
-                    var mtime = data.stdout.trim()
-                    if (mtime === root._lastMtime) {
-                        // Our own save — skip the redundant read.
-                        return
-                    }
-                    // Different mtime — another writer was active, fall through
-                    // to read the remote changes.
-                } else {
-                    return
-                }
-            }
-            if (data["exit code"] === 0) {
-                var mtime = data.stdout.trim()
-                if (mtime !== root._lastMtime) {
-                    root._lastMtime = mtime
-                    var path = plasmoid.configuration.storagePath
-                    if (path !== "") fileReader.run(path)
-                }
-            }
+            taskModel.pollResult(data["exit code"], data.stdout || "")
         }
-        function check(path) { connectSource("stat -c %Y '" + path.replace(/'/g, "'\\''") + "'") }
+        function check(path) { connectSource(taskModel._statCmd(path)) }
     }
 
     Plasma5Support.DataSource {
@@ -210,7 +230,6 @@ PlasmoidItem {
                 if (result.imported > 0 || result.updated > 0) {
                     root._updateTrigger++
                     root.updateDistinctCategories()
-                    root._skipNextPoll = true
                 }
             } else {
                 console.warn("KDoit markdown import: file read failed")
@@ -225,13 +244,13 @@ PlasmoidItem {
         repeat: true
         running: plasmoid.configuration.syncEnabled
         onTriggered: {
-            var path = plasmoid.configuration.storagePath
-            if (path !== "") mtimeChecker.check(path)
+            if (taskModel._path !== "") mtimeChecker.check(taskModel._path)
         }
     }
 
     TaskModel {
         id: taskModel
+        cfg: Plasmoid.configuration
         onRunShellCmd: function(cmd) { writer.run(cmd) }
         onRequestFileLoad: function(path) { fileReader.run(path) }
         onModelReloaded: {
@@ -276,6 +295,9 @@ PlasmoidItem {
         function onListTitleChanged() {
             if (!root.isSublistView())
                 root.currentTitle = plasmoid.configuration.listTitle || i18n("K Do it!")
+        }
+        function onStoragePathChanged() {
+            taskModel.storagePathChanged()
         }
     }
 
@@ -418,15 +440,7 @@ PlasmoidItem {
         } else if (lastDeleted.type === "multi") {
             var items = lastDeleted.items.slice().sort(function(a, b) { return a.index - b.index })
             for (var i = 0; i < items.length; i++) {
-                var t = items[i].task
-                var nt = taskModel.normalizeTask(t)
-                var clamped = Math.max(0, Math.min(items[i].index, taskModel.count))
-                taskModel.insert(clamped, {
-                    uuid: nt.uuid, title: nt.title, done: nt.done,
-                    priority: nt.priority, category: nt.category,
-                    createdAt: nt.createdAt, modifiedAt: nt.modifiedAt,
-                    dueDate: nt.dueDate, sublist: taskModel.normalizeSublist(nt.sublist)
-                })
+                taskModel.restoreTask(items[i].index, items[i].task)
             }
             taskModel.save()
         } else if (!lastDeleted.type) {
@@ -790,6 +804,32 @@ PlasmoidItem {
                 iconSource: root.currentModel.count > 0 && (root.searchText.length > 0 || root.categoryFilter !== "")
                     ? "view-filter-symbolic"
                     : "view-task"
+            }
+
+            Kirigami.InlineMessage {
+                id: storageMessage
+                Layout.fillWidth: true
+                visible: taskModel.storageError !== ""
+                type: Kirigami.MessageType.Error
+                text: {
+                    var p = taskModel._path
+                    switch (taskModel.storageError) {
+                    case "unreadable":
+                        return i18n("The tasks file %1 could not be read, so nothing was written to it. Your tasks are kept in the widget settings.", p)
+                    case "nodir":
+                        return i18n("The folder for %1 does not exist, so nothing was written. Your tasks are kept in the widget settings.", p)
+                    case "corrupt":
+                        return i18n("The tasks file %1 is damaged and was left untouched. Your tasks are kept in the widget settings.", p)
+                    default:
+                        return i18n("Tasks could not be saved to %1. Your changes are kept in the widget settings only.", p)
+                    }
+                }
+                actions: [
+                    Kirigami.Action {
+                        text: i18n("Retry")
+                        onTriggered: taskModel.retryStorage()
+                    }
+                ]
             }
 
             Kirigami.InlineMessage {

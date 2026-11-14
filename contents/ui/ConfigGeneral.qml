@@ -16,12 +16,10 @@ Kirigami.Page {
     property bool cfg_hideCompletedDefault: false
     property bool cfg_verboseDates
     property bool cfg_verboseDatesDefault: true
-    property string cfg_tasksJson
-    property string cfg_tasksJsonDefault: "[]"
+    // tasksJson, migratedToFile and tombstonesJson are deliberately not exposed
+    // here: Apply would write a stale snapshot of them back over live data.
     property string cfg_storagePath
     property string cfg_storagePathDefault: ""
-    property bool cfg_migratedToFile
-    property bool cfg_migratedToFileDefault: false
     property bool cfg_syncEnabled
     property bool cfg_syncEnabledDefault: false
     property string cfg_managedCategories
@@ -69,10 +67,18 @@ Kirigami.Page {
             Component.onCompleted: text = root.cfg_storagePath
             onEditingFinished: {
                 var v = text.trim()
-                if (v !== "" && v.indexOf("'") === -1 && v.indexOf("\n") === -1)
+                if (v.startsWith("file://")) {
+                    v = v.substring(7)
+                    try { v = decodeURIComponent(v) } catch (e) { v = "" }
+                }
+                // Absolute file paths only: a relative path or a folder would
+                // silently point the widget somewhere unexpected.
+                if (v.startsWith("/") && !v.endsWith("/") && v.indexOf("'") === -1 && v.indexOf("\n") === -1) {
                     root.cfg_storagePath = v
-                else
+                    text = v
+                } else {
                     text = root.cfg_storagePath
+                }
             }
         }
 

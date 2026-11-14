@@ -1,9 +1,65 @@
 import QtQuick
 import QtCore
-import org.kde.plasma.plasmoid
 
+// Task list model plus the file storage engine.
+//
+// Storage rules (data-loss safety):
+// - Every read goes through _readCmd(), which reports MISSING / NODIR /
+//   UNREADABLE / EMPTY / OK so a failed read is never mistaken for "no tasks".
+// - Every JSON write is serialized (one at a time), chunked (no argv limit),
+//   and compare-and-swap: the write is refused with CONFLICT if the file's
+//   "mtime size" signature is not the one we last read or wrote. A conflict
+//   triggers a re-read and merge, then a new write.
+// - The previous file is kept as <path>.bak, and timestamped snapshots are
+//   kept for destructive merges and for the first write of each session.
+// - Deletions travel between machines as tombstones in the file's "deleted"
+//   array; a local task is only removed when the file carries a tombstone that
+//   is at least as new as the task, and only on live sync reads.
+// - The widget-settings copy (cfg.tasksJson) is updated on every save, so a
+//   failed file write never loses the change.
 ListModel {
     id: model
+
+    // Injected configuration object (Plasmoid.configuration in the widget, a
+    // plain QtObject in tests).
+    property var cfg: null
+
+    // Non-empty when the tasks file cannot be read or written. One of
+    // "unreadable", "nodir", "corrupt", "write", "conflict".
+    property string storageError: ""
+
+    property bool _started: false
+    property string _path: ""
+    property bool _loaded: false
+    property bool _writeBusy: false
+    property bool _writeDirty: false
+    property bool _writeBlocked: false
+    property string _intent: ""
+    property string _fileSig: ""
+    property string _tmpToken: ""
+    property int _cmdSeq: 0
+    property var _job: null
+    property int _jobIdx: 0
+    property bool _exportsPending: false
+    property bool _readInFlight: false
+    property bool _readWanted: false
+    property string _readTarget: "main"
+    property string _readBase: ""
+    property string _lastReadCmd: ""
+    property string _bakMode: ""
+    property bool _initialLoad: true
+    property bool _noDeleteNextLoad: false
+    property bool _sessionSnapshotDone: false
+    property int _conflictRetries: 0
+    property int _conflictCount: 0
+    property var _sampleUuids: ({})
+    property bool _pendingSamples: false
+    property bool _samplesRefused: false
+    property var _tombs: ({})
+
+    readonly property int _chunkSize: 60000
+    readonly property int _maxConflictRetries: 3
+    readonly property int _tombstoneDays: 30
 
     signal runShellCmd(string cmd)
     signal requestFileLoad(string path)
@@ -18,24 +74,55 @@ ListModel {
         })
     }
 
-    function _base64(str) {
+    function _randomHex(n) {
+        var s = ""
+        for (var i = 0; i < n; i++)
+            s += Math.floor(Math.random() * 16).toString(16)
+        return s
+    }
+
+    function _base64Bytes(bytes) {
         var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
-        var bytes = _toUtf8Bytes(str)
-        var result = ""
+        var out = []
         for (var j = 0; j < bytes.length; j += 3) {
             var b0 = bytes[j]
             var b1 = j + 1 < bytes.length ? bytes[j + 1] : 0
             var b2 = j + 2 < bytes.length ? bytes[j + 2] : 0
-            result += chars[b0 >> 2]
-            result += chars[((b0 & 3) << 4) | (b1 >> 4)]
-            result += j + 1 < bytes.length ? chars[((b1 & 15) << 2) | (b2 >> 6)] : "="
-            result += j + 2 < bytes.length ? chars[b2 & 63] : "="
+            out.push(chars[b0 >> 2] +
+                     chars[((b0 & 3) << 4) | (b1 >> 4)] +
+                     (j + 1 < bytes.length ? chars[((b1 & 15) << 2) | (b2 >> 6)] : "=") +
+                     (j + 2 < bytes.length ? chars[b2 & 63] : "="))
         }
-        return result
+        return out.join("")
+    }
+
+    function _base64(str) {
+        return _base64Bytes(_toUtf8Bytes(str))
     }
 
     function _shellArg(s) {
-        return "'" + s.replace(/'/g, "'\\''") + "'"
+        return "'" + String(s).replace(/'/g, "'\\''") + "'"
+    }
+
+    function _dirOf(path) {
+        var lastSlash = path.lastIndexOf("/")
+        if (lastSlash === -1) return "."
+        if (lastSlash === 0) return "/"
+        return path.substring(0, lastSlash)
+    }
+
+    function _normalizePath(p) {
+        var v = (p === undefined || p === null) ? "" : String(p).trim()
+        if (v.startsWith("file://")) {
+            v = v.substring(7)
+            try { v = decodeURIComponent(v) } catch (e) { }
+        }
+        return v
+    }
+
+    function _defaultPath() {
+        var dataHome = _normalizePath(StandardPaths.writableLocation(StandardPaths.GenericDataLocation).toString())
+        return dataHome + "/kdoit/tasks.json"
     }
 
     function touch(index) {
@@ -89,127 +176,678 @@ ListModel {
         } catch(e) { return [] }
     }
 
-    // Called by main.qml's fileReader DataSource after a shell-based cat of the file.
-    // Merges file content with in-memory model (uuid-based, newer modifiedAt wins).
-    // Remote deletions are propagated via a knowledge-horizon heuristic: a local task
-    // absent from the file is removed when its modifiedAt is no newer than the remote's
-    // most recent task write (the remote "knew about" it and chose to omit it).
-    // Tasks added locally after the remote's last write are kept.
-    function loadFromShell(json) {
-        if (!json || json.trim() === "") {
-            if (count === 0 && !plasmoid.configuration.migratedToFile) {
-                _addDefaultTasks()
-                save()
-                modelReloaded()
+    // ---------------------------------------------------------------------
+    // Tombstones
+    // ---------------------------------------------------------------------
+
+    function _pruneTombs(map) {
+        var cutoff = new Date(Date.now() - _tombstoneDays * 86400000).toISOString()
+        var out = {}
+        for (var u in map) {
+            if (map[u] && map[u] >= cutoff) out[u] = map[u]
+        }
+        return out
+    }
+
+    function _tombsFromArray(arr) {
+        var map = {}
+        if (!Array.isArray(arr)) return map
+        for (var i = 0; i < arr.length; i++) {
+            var t = arr[i]
+            if (!t || !t.uuid || !t.deletedAt) continue
+            var u = String(t.uuid), d = String(t.deletedAt)
+            if (!map[u] || d > map[u]) map[u] = d
+        }
+        return map
+    }
+
+    function _tombsToArray() {
+        var arr = []
+        for (var u in _tombs) arr.push({ uuid: u, deletedAt: _tombs[u] })
+        arr.sort(function(a, b) { return a.deletedAt < b.deletedAt ? -1 : (a.deletedAt > b.deletedAt ? 1 : 0) })
+        return arr
+    }
+
+    function _mergeTombs(map) {
+        var m = Object.assign({}, _tombs)
+        var changed = false
+        for (var u in map) {
+            if (!m[u] || map[u] > m[u]) { m[u] = map[u]; changed = true }
+        }
+        _tombs = _pruneTombs(m)
+        return changed
+    }
+
+    function _addTomb(uuid) {
+        if (!uuid) return
+        var m = Object.assign({}, _tombs)
+        m[uuid] = new Date().toISOString()
+        _tombs = m
+    }
+
+    function _removeTomb(uuid) {
+        if (!uuid || _tombs[uuid] === undefined) return
+        var m = Object.assign({}, _tombs)
+        delete m[uuid]
+        _tombs = m
+    }
+
+    // ---------------------------------------------------------------------
+    // Shell command builders
+    // ---------------------------------------------------------------------
+
+    function _tag(kind) {
+        _cmdSeq++
+        return ": kdoit-" + kind + "-" + _tmpToken + "-" + _cmdSeq + "; "
+    }
+
+    // Prints one status line, then (for OK) the file content:
+    //   KDOIT-STATUS:MISSING            file absent, parent dir exists
+    //   KDOIT-STATUS:NODIR              parent dir absent
+    //   KDOIT-STATUS:UNREADABLE         not a regular readable file
+    //   KDOIT-STATUS:EMPTY <sig>        zero-length file
+    //   KDOIT-STATUS:OK <sig>\n<content>
+    // <sig> is `stat -L -c '%y %s'`. The content is re-read if the file
+    // changes while it is being read.
+    function _readCmd(path) {
+        var cmd = _tag("read") + "P=" + _shellArg(path) + "; " +
+            "D=$(dirname -- \"$P\"); " +
+            "if [ ! -e \"$P\" ] && [ ! -L \"$P\" ]; then " +
+                "if [ -d \"$D\" ] && [ -x \"$D\" ]; then echo KDOIT-STATUS:MISSING; " +
+                "elif [ -e \"$D\" ]; then echo KDOIT-STATUS:UNREADABLE; " +
+                "else echo KDOIT-STATUS:NODIR; fi; exit 0; fi; " +
+            "if [ ! -f \"$P\" ] || [ ! -r \"$P\" ]; then echo KDOIT-STATUS:UNREADABLE; exit 0; fi; " +
+            "n=0; while :; do " +
+                "S1=$(stat -L -c '%y %s' -- \"$P\") || { echo KDOIT-STATUS:UNREADABLE; exit 0; }; " +
+                "if [ ! -s \"$P\" ]; then echo \"KDOIT-STATUS:EMPTY $S1\"; exit 0; fi; " +
+                "C=$(cat -- \"$P\" && printf x) || { echo KDOIT-STATUS:UNREADABLE; exit 0; }; " +
+                "S2=$(stat -L -c '%y %s' -- \"$P\") || { echo KDOIT-STATUS:UNREADABLE; exit 0; }; " +
+                "[ \"$S1\" = \"$S2\" ] && break; " +
+                "n=$((n + 1)); if [ $n -ge 5 ]; then echo KDOIT-STATUS:UNREADABLE; exit 0; fi; sleep 0.2; " +
+            "done; " +
+            "printf 'KDOIT-STATUS:OK %s\\n%s' \"$S1\" \"${C%x}\""
+        _lastReadCmd = cmd
+        return cmd
+    }
+
+    // Signature used by the sync poll; same format as the read/write protocol.
+    function _statCmd(path) {
+        var P = _shellArg(path)
+        return "if [ -e " + P + " ] || [ -L " + P + " ]; then " +
+            "stat -L -c '%y %s' -- " + P + " 2>/dev/null || echo UNREADABLE; " +
+            "else echo MISSING; fi"
+    }
+
+    // Builds the command sequence for one atomic file write.
+    // opts: { cas, expectSig, intent, backup, snapshot }
+    function _buildWriteCmds(path, content, opts) {
+        var bytes = _toUtf8Bytes(content)
+        var b64 = _base64Bytes(bytes)
+        var B = path + ".tmp." + _tmpToken + ".b64"
+        var cmds = []
+        cmds.push(_tag("w") + "mkdir -p -- " + _shellArg(_dirOf(path)) + " && : > " + _shellArg(B))
+        for (var i = 0; i < b64.length; i += _chunkSize)
+            cmds.push(_tag("w") + "printf '%s' '" + b64.substring(i, i + _chunkSize) + "' >> " + _shellArg(B))
+        var script = _tag("w") +
+            "set -e; " +
+            "P=" + _shellArg(path) + "; B=" + _shellArg(B) + "; " +
+            "E=" + _shellArg(opts.expectSig || "") + "; I=" + _shellArg(opts.intent || "user") + "; " +
+            "N=" + bytes.length + "; CAS=" + (opts.cas ? 1 : 0) + "; BK=" + (opts.backup ? 1 : 0) + "; " +
+            "SNAP=" + (opts.snapshot ? 1 : 0) + "; TK=" + _tmpToken + "; T=; " +
+            "trap 'rm -f -- \"$B\"; [ -n \"$T\" ] && rm -f -- \"$T\"; :' EXIT; " +
+            "if [ -e \"$P\" ] || [ -L \"$P\" ]; then C=$(stat -L -c '%y %s' -- \"$P\" 2>/dev/null) || C=UNREADABLE; else C=MISSING; fi; " +
+            "if [ \"$CAS\" = 1 ] && [ \"$C\" != \"$E\" ]; then echo KDOIT-WRITE:CONFLICT; exit 3; fi; " +
+            "if [ -L \"$P\" ]; then R=$(readlink -f -- \"$P\"); else R=$P; fi; " +
+            "if [ \"$I\" = defaults ] && [ -s \"$R\" ]; then echo KDOIT-WRITE:REFUSED; exit 4; fi; " +
+            "T=\"$R.tmp.$TK\"; " +
+            "base64 -d < \"$B\" > \"$T\"; " +
+            "S=$(wc -c < \"$T\"); S=$((S + 0)); " +
+            "if [ \"$S\" -ne \"$N\" ]; then echo \"KDOIT-WRITE:SHORT $S\"; exit 5; fi; " +
+            "if [ \"$BK\" = 1 ] && [ -s \"$P\" ]; then " +
+                "cp -p -- \"$P\" \"$P.bak\"; " +
+                "if [ \"$SNAP\" = 1 ]; then " +
+                    "F=\"$P.bak-$(date +%Y%m%d-%H%M%S)\"; if [ -e \"$F\" ]; then F=\"$F-$$\"; fi; " +
+                    "cp -p -- \"$P\" \"$F\"; " +
+                    "ls -1d -- \"$P\".bak-[0-9]* 2>/dev/null | sort -r | tail -n +11 | " +
+                        "while IFS= read -r f; do rm -f -- \"$f\"; done; " +
+                "fi; " +
+            "fi; " +
+            "sync -d \"$T\" 2>/dev/null || true; " +
+            "mv -f -- \"$T\" \"$R\"; T=; " +
+            "echo \"KDOIT-WRITE:OK $(stat -L -c '%y %s' -- \"$P\")\""
+        cmds.push(script)
+        return cmds
+    }
+
+    // ---------------------------------------------------------------------
+    // Reading
+    // ---------------------------------------------------------------------
+
+    function requestRead() {
+        if (_path === "") return
+        if (_readInFlight || _writeBusy) {
+            _readWanted = true
+            return
+        }
+        _startRead(_path, "main")
+    }
+
+    function _startRead(path, target) {
+        _readInFlight = true
+        _readTarget = target
+        _readBase = _path
+        requestFileLoad(path)
+    }
+
+    function _parseReadResult(exitCode, stdout) {
+        var out = stdout || ""
+        var nl = out.indexOf("\n")
+        var first = nl === -1 ? out : out.substring(0, nl)
+        if (exitCode !== 0 || first.indexOf("KDOIT-STATUS:") !== 0)
+            return { status: "UNREADABLE", sig: "", content: "" }
+        var rest = first.substring("KDOIT-STATUS:".length)
+        var sp = rest.indexOf(" ")
+        var status = sp === -1 ? rest : rest.substring(0, sp)
+        var sig = sp === -1 ? "" : rest.substring(sp + 1)
+        var known = ["MISSING", "NODIR", "UNREADABLE", "EMPTY", "OK"]
+        if (known.indexOf(status) === -1)
+            return { status: "UNREADABLE", sig: "", content: "" }
+        return { status: status, sig: sig, content: nl === -1 ? "" : out.substring(nl + 1) }
+    }
+
+    // Returns { tasks: [...], deleted: {uuid: deletedAt} } or null if the
+    // content is not a recognised task document.
+    function _parseDoc(text) {
+        var doc
+        try { doc = JSON.parse(text) } catch (e) { return null }
+        var tasks = null, deleted = []
+        if (Array.isArray(doc)) tasks = doc
+        else if (doc && typeof doc === "object" && Array.isArray(doc.tasks)) {
+            tasks = doc.tasks
+            if (Array.isArray(doc.deleted)) deleted = doc.deleted
+        }
+        if (tasks === null) return null
+        tasks = tasks.filter(function(x) { return x != null && typeof x === "object" })
+        return { tasks: tasks, deleted: _tombsFromArray(deleted) }
+    }
+
+    // Called by main.qml's fileReader with the output of _readCmd().
+    function loadFromShell(exitCode, stdout, cmd) {
+        if (!_readInFlight) return
+        if (cmd !== undefined && cmd !== _lastReadCmd) return
+        _readInFlight = false
+        var r = _parseReadResult(exitCode, stdout)
+        try {
+            if (_readBase !== _path)
+                _readWanted = true          // path changed while reading
+            else if (_readTarget === "bak")
+                _handleBakRead(r)
+            else
+                _handleMainRead(r)
+        } catch (e) {
+            console.warn("KDoit loadFromShell:", e)
+        }
+        _afterIo()
+    }
+
+    function readTimeout() {
+        if (!_readInFlight) return
+        console.warn("KDoit: reading the tasks file timed out")
+        loadFromShell(-1, "", _lastReadCmd)
+    }
+
+    function _clearReadError() {
+        if (storageError === "unreadable" || storageError === "nodir" || storageError === "corrupt")
+            storageError = ""
+    }
+
+    function _handleMainRead(r) {
+        var initial = _initialLoad
+        var noDelete = _noDeleteNextLoad
+        _initialLoad = false
+        _noDeleteNextLoad = false
+
+        var st = r.status
+        if (st === "NODIR" && _path === _defaultPath()) st = "MISSING"
+        if (st === "OK" && r.content.trim() === "") st = "EMPTY"
+
+        if (st === "UNREADABLE" || st === "NODIR") {
+            // Never inject samples, never write; keep whatever is in memory.
+            _fileSig = ""
+            _writeBlocked = true
+            storageError = st === "NODIR" ? "nodir" : "unreadable"
+            _loaded = true
+            console.warn("KDoit: tasks file", _path, "status", st, "- writes paused")
+            return
+        }
+
+        if (st === "MISSING" || st === "EMPTY") {
+            _fileSig = st === "MISSING" ? "MISSING" : r.sig
+            _writeBlocked = false
+            _clearReadError()
+            if (count === 0) {
+                _bakMode = "recover"
+                _startRead(_path + ".bak", "bak")
+                return
+            }
+            _loaded = true
+            save("merge")
+            return
+        }
+
+        // OK with content
+        _fileSig = r.sig
+        var parsed = _parseDoc(r.content)
+        if (parsed === null) {
+            console.warn("KDoit: tasks file", _path, "could not be parsed")
+            if (count === 0) {
+                _bakMode = "corrupt"
+                _startRead(_path + ".bak", "bak")
+                return
+            }
+            // Keep memory; the write snapshots the damaged file first.
+            _writeBlocked = false
+            _loaded = true
+            save("destructive")
+            return
+        }
+
+        _writeBlocked = false
+        _loaded = true
+        _clearReadError()
+        _mergeTombs(parsed.deleted)
+        if (_pendingSamples && parsed.tasks.length > 0)
+            _dropSamples()
+
+        if (parsed.tasks.length === 0) {
+            if (count === 0) return     // nothing on either side
+            if (initial || noDelete || !cfg.syncEnabled) {
+                // Local wins: an empty file never wipes memory on load.
+                save("merge")
+                return
+            }
+            // Live sync read: fall through to the tombstone merge, which only
+            // removes tasks the file explicitly marks as deleted.
+        }
+
+        var allowDelete = cfg.syncEnabled === true && !initial && !noDelete
+        var res = _mergeIncoming(parsed.tasks, parsed.deleted, allowDelete)
+        if (res.removed > 0) save("destructive")
+        else if (res.changed || res.needWrite) save("merge")
+        if (res.changed || res.removed > 0) modelReloaded()
+    }
+
+    function _handleBakRead(r) {
+        var mode = _bakMode
+        _bakMode = ""
+        var parsed = null
+        if (r.status === "OK") {
+            parsed = _parseDoc(r.content)
+            if (parsed && parsed.tasks.length === 0) parsed = null
+        }
+        if (parsed) {
+            console.warn("KDoit: recovered", parsed.tasks.length, "tasks from", _path + ".bak")
+            _mergeTombs(parsed.deleted)
+            _mergeIncoming(parsed.tasks, parsed.deleted, false)
+            _loaded = true
+            _writeBlocked = false
+            save(mode === "corrupt" ? "destructive" : "merge")
+            modelReloaded()
+            return
+        }
+        _loaded = true
+        if (mode === "corrupt") {
+            _writeBlocked = true
+            storageError = "corrupt"
+            return
+        }
+        _writeBlocked = false
+        if (count === 0 && cfg.migratedToFile !== true && !_samplesRefused) {
+            _injectSamples()
+            save("defaults")
+            modelReloaded()
+        }
+    }
+
+    // Merges incoming tasks into the model (uuid-based, newer modifiedAt wins).
+    // Local tasks are only removed when allowDelete is true and the incoming
+    // document has a tombstone for them that is at least as new as the task.
+    function _mergeIncoming(incoming, incomingTombs, allowDelete) {
+        var changed = false, removed = 0, needWrite = false
+        var currentByUuid = {}
+        for (var i = 0; i < count; i++)
+            currentByUuid[get(i).uuid] = i
+        var seen = {}
+
+        for (var j = 0; j < incoming.length; j++) {
+            var inc = normalizeTask(incoming[j])
+            // Missing modifiedAt counts as epoch so external tasks without a
+            // timestamp never overwrite local edits.
+            if (!incoming[j].modifiedAt) inc.modifiedAt = "1970-01-01T00:00:00.000Z"
+            seen[inc.uuid] = true
+            var idx = currentByUuid[inc.uuid]
+            if (idx !== undefined) {
+                var existing = get(idx)
+                if (inc.modifiedAt > existing.modifiedAt) {
+                    setProperty(idx, "title", inc.title)
+                    setProperty(idx, "done", inc.done)
+                    setProperty(idx, "priority", inc.priority)
+                    setProperty(idx, "category", inc.category)
+                    if (!existing.createdAt)
+                        setProperty(idx, "createdAt", inc.createdAt)
+                    setProperty(idx, "modifiedAt", inc.modifiedAt)
+                    setProperty(idx, "dueDate", inc.dueDate)
+                    var sub = existing.sublist
+                    if (sub && typeof sub.clear === "function") {
+                        sub.clear()
+                        for (var k = 0; k < inc.sublist.length; k++)
+                            sub.append(inc.sublist[k])
+                    } else {
+                        setProperty(idx, "sublist", inc.sublist)
+                    }
+                    changed = true
+                } else if (existing.modifiedAt > inc.modifiedAt) {
+                    needWrite = true
+                }
+            } else {
+                var tomb = _tombs[inc.uuid]
+                if (tomb !== undefined && tomb >= inc.modifiedAt)
+                    continue            // deleted elsewhere; do not resurrect
+                append(inc)
+                currentByUuid[inc.uuid] = count - 1
+                changed = true
+            }
+        }
+
+        if (allowDelete) {
+            for (var d = count - 1; d >= 0; d--) {
+                var t = get(d)
+                var ts = incomingTombs[t.uuid]
+                if (ts !== undefined && ts >= t.modifiedAt) {
+                    remove(d)
+                    removed++
+                }
+            }
+        }
+
+        for (var n = 0; n < count; n++) {
+            if (!seen[get(n).uuid]) { needWrite = true; break }
+        }
+        for (var u in _tombs) {
+            if (incomingTombs[u] === undefined || incomingTombs[u] < _tombs[u]) { needWrite = true; break }
+        }
+        return { changed: changed, removed: removed, needWrite: needWrite }
+    }
+
+    // Called by main.qml's sync poll with the output of _statCmd().
+    function pollResult(exitCode, stdout) {
+        if (!_loaded || _readInFlight || _writeBusy || exitCode !== 0) return
+        var sig = (stdout || "").trim()
+        if (sig !== _fileSig) requestRead()
+    }
+
+    // Called when the configured storage path changes.
+    function storagePathChanged() {
+        if (!_started || !cfg) return
+        var p = _normalizePath(cfg.storagePath)
+        if (p === "") p = _defaultPath()
+        if (p === _path) return
+        _path = p
+        _fileSig = ""
+        _loaded = false
+        _noDeleteNextLoad = true
+        _writeBlocked = false
+        _conflictRetries = 0
+        storageError = ""
+        requestRead()
+    }
+
+    // "Retry" from the error banner.
+    function retryStorage() {
+        _conflictRetries = 0
+        requestRead()
+    }
+
+    function _injectSamples() {
+        var before = count
+        _addDefaultTasks()
+        var m = {}
+        for (var i = before; i < count; i++) m[get(i).uuid] = true
+        _sampleUuids = m
+        _pendingSamples = true
+    }
+
+    function _dropSamples() {
+        var m = _sampleUuids
+        for (var i = count - 1; i >= 0; i--) {
+            if (m[get(i).uuid]) remove(i)
+        }
+        _sampleUuids = {}
+        _pendingSamples = false
+        _updateConfigCopy()
+        modelReloaded()
+    }
+
+    // ---------------------------------------------------------------------
+    // Writing
+    // ---------------------------------------------------------------------
+
+    function _intentRank(i) {
+        return ({ "": -1, "defaults": 0, "user": 1, "merge": 2, "destructive": 3 })[i] || 0
+    }
+
+    function _maxIntent(a, b) {
+        return _intentRank(a) >= _intentRank(b) ? a : b
+    }
+
+    function _tasksArray() {
+        var arr = []
+        for (var i = 0; i < count; i++) {
+            var t = get(i)
+            arr.push({
+                uuid: t.uuid,
+                title: t.title,
+                done: t.done,
+                priority: t.priority,
+                category: t.category,
+                createdAt: t.createdAt,
+                modifiedAt: t.modifiedAt,
+                dueDate: t.dueDate,
+                sublist: normalizeSublist(t.sublist)
+            })
+        }
+        return arr
+    }
+
+    function _serializeDoc() {
+        _tombs = _pruneTombs(_tombs)
+        return JSON.stringify({ version: 1, tasks: _tasksArray(), deleted: _tombsToArray() }, null, 2)
+    }
+
+    function _updateConfigCopy() {
+        if (!cfg) return
+        cfg.tasksJson = JSON.stringify(_tasksArray())
+        cfg.tombstonesJson = JSON.stringify(_tombsToArray())
+    }
+
+    function _mdPath() {
+        var mdPath = cfg.markdownPath ? _normalizePath(cfg.markdownPath) : ""
+        if (mdPath === "") {
+            mdPath = _path.replace(/\.json$/i, ".md")
+            if (mdPath === _path) mdPath = _path + ".md"
+        }
+        return mdPath
+    }
+
+    function _icsPath() {
+        var icsPath = _path.replace(/\.json$/i, ".ics")
+        if (icsPath === _path) icsPath = _path + ".ics"
+        return icsPath
+    }
+
+    function _pump() {
+        if (!_loaded || _writeBusy || _readInFlight || _path === "") return
+        if (_writeDirty && _writeBlocked) {
+            // Do not write blind: re-read first. The read result unblocks.
+            requestRead()
+            return
+        }
+        if (_writeDirty) {
+            if (count === 0 && _fileSig === "MISSING" && Object.keys(_tombs).length === 0) {
+                // Nothing worth creating a file for.
+                _writeDirty = false
+                _intent = ""
+            } else {
+                _startJsonWrite()
+                return
+            }
+        }
+        if (_exportsPending) {
+            _exportsPending = false
+            _startExports()
+        }
+    }
+
+    function _afterIo() {
+        if (_readWanted && !_readInFlight && !_writeBusy) {
+            _readWanted = false
+            requestRead()
+            return
+        }
+        if (!_writeBlocked) _pump()
+    }
+
+    function _startJsonWrite() {
+        var intent = _intent || "user"
+        _writeDirty = false
+        _intent = ""
+        var snap = intent === "destructive" || !_sessionSnapshotDone
+        var cmds = _buildWriteCmds(_path, _serializeDoc(), {
+            cas: true, expectSig: _fileSig, intent: intent, backup: true, snapshot: snap
+        })
+        _startJob({ kind: "json", path: _path, cmds: cmds, intent: intent })
+    }
+
+    function _startExports() {
+        var cmds = []
+        if (cfg.markdownExport) {
+            var mdPath = _mdPath()
+            if (mdPath !== _path)
+                cmds = cmds.concat(_buildWriteCmds(mdPath, _serializeMarkdown(),
+                    { cas: false, intent: "export", backup: false, snapshot: false }))
+        }
+        if (cfg.enableIcsExport) {
+            var ics = _buildIcs()
+            if (ics !== null)
+                cmds = cmds.concat(_buildWriteCmds(_icsPath(), ics,
+                    { cas: false, intent: "export", backup: false, snapshot: false }))
+        }
+        if (cmds.length > 0)
+            _startJob({ kind: "export", path: _path, cmds: cmds, intent: "export" })
+    }
+
+    function _startJob(job) {
+        _job = job
+        _jobIdx = 0
+        _writeBusy = true
+        runShellCmd(job.cmds[0])
+    }
+
+    // Called by main.qml's writer DataSource for every finished command.
+    function shellResult(cmd, exitCode, stdout, stderr) {
+        var job = _job
+        if (!job || cmd !== job.cmds[_jobIdx]) return
+        if (_jobIdx < job.cmds.length - 1) {
+            if (exitCode === 0) {
+                _jobIdx++
+                runShellCmd(job.cmds[_jobIdx])
+            } else {
+                _jobFailed(job, "step " + _jobIdx + " exit " + exitCode + ": " + (stderr || stdout || ""))
             }
             return
         }
-        try {
-            var doc = JSON.parse(json)
-            var incoming
-            if (doc && Array.isArray(doc.tasks)) incoming = doc.tasks
-            else if (Array.isArray(doc)) incoming = doc
-            if (!incoming) return
+        var m = /KDOIT-WRITE:([A-Z]+)(?: ([^\n]*))?/.exec(stdout || "")
+        var status = m ? m[1] : ""
+        _job = null
+        _writeBusy = false
 
-            var changed = false
+        if (job.kind === "export") {
+            if (exitCode !== 0 || status !== "OK")
+                console.warn("KDoit export failed:", stderr || stdout)
+            _afterIo()
+            return
+        }
 
-            if (incoming.length === 0) {
-                if (count > 0) {
-                    // Remote wiped all tasks -propagate deletion
-                    for (var w = count - 1; w >= 0; w--)
-                        remove(w)
-                    save()
-                    modelReloaded()
-                } else if (!plasmoid.configuration.migratedToFile) {
-                    // Empty file on a fresh instance -inject defaults
-                    _addDefaultTasks()
-                    save()
-                    modelReloaded()
-                }
+        if (exitCode === 0 && status === "OK") {
+            if (job.path === _path) {
+                _fileSig = (m[2] || "").trim()
+                if (cfg.migratedToFile !== true)
+                    cfg.migratedToFile = true
+                storageError = ""
+                _writeBlocked = false
+                _conflictRetries = 0
+                _pendingSamples = false
+                _sampleUuids = {}
+                _sessionSnapshotDone = true
+                if (cfg.markdownExport || cfg.enableIcsExport)
+                    _exportsPending = true
+            }
+            _afterIo()
+            return
+        }
+
+        if (status === "CONFLICT") {
+            _conflictCount++
+            _writeDirty = true
+            _intent = _maxIntent(_intent, job.intent)
+            _conflictRetries++
+            if (_conflictRetries > _maxConflictRetries) {
+                storageError = "conflict"
+                _writeBlocked = true
+                console.warn("KDoit: tasks file keeps changing during save; giving up for now")
                 return
             }
-
-            // Compute the remote's knowledge horizon and UUID set from raw data,
-            // before normalizeTask which would stamp a missing modifiedAt with now().
-            var incomingMaxMtime = ""
-            var incomingUuids = {}
-            for (var p = 0; p < incoming.length; p++) {
-                var raw = incoming[p]
-                if (raw.uuid) incomingUuids[raw.uuid] = true
-                if (raw.modifiedAt && raw.modifiedAt > incomingMaxMtime)
-                    incomingMaxMtime = raw.modifiedAt
-            }
-
-            // Build uuid → index lookup for the current model
-            var currentByUuid = {}
-            for (var i = 0; i < count; i++) {
-                var cur = get(i)
-                currentByUuid[cur.uuid] = i
-            }
-
-            // Merge incoming tasks into the current model
-            for (var j = 0; j < incoming.length; j++) {
-                var inc = normalizeTask(incoming[j])
-                // Treat a missing modifiedAt as epoch so external-tool tasks without
-                // a timestamp never silently overwrite locally-modified data.
-                if (!incoming[j].modifiedAt) inc.modifiedAt = "1970-01-01T00:00:00.000Z"
-                var idx = currentByUuid[inc.uuid]
-                if (idx !== undefined) {
-                    // Task exists locally -update in-place if incoming is newer
-                    var existing = get(idx)
-                    if (inc.modifiedAt > existing.modifiedAt) {
-                        setProperty(idx, "title", inc.title)
-                        setProperty(idx, "done", inc.done)
-                        setProperty(idx, "priority", inc.priority)
-                        setProperty(idx, "category", inc.category)
-                        if (!existing.createdAt)
-                            setProperty(idx, "createdAt", inc.createdAt)
-                        setProperty(idx, "modifiedAt", inc.modifiedAt)
-                        setProperty(idx, "dueDate", inc.dueDate)
-                        // Sublist is a child ListModel -update in-place
-                        var sub = existing.sublist
-                        if (sub && typeof sub.clear === "function") {
-                            sub.clear()
-                            for (var k = 0; k < inc.sublist.length; k++)
-                                sub.append(inc.sublist[k])
-                        } else {
-                            setProperty(idx, "sublist", inc.sublist)
-                        }
-                        changed = true
-                    }
-                } else {
-                    // New task from remote -append and register in the map so a
-                    // duplicate UUID in the incoming file is not appended twice.
-                    append(inc)
-                    currentByUuid[inc.uuid] = count - 1
-                    changed = true
-                }
-            }
-
-            // Propagate remote deletions: remove local tasks that the remote knew about
-            // (local.modifiedAt <= incomingMaxMtime) but omitted from its file.
-            if (incomingMaxMtime !== "") {
-                for (var d = count - 1; d >= 0; d--) {
-                    var localUuid = get(d).uuid
-                    var localMtime = get(d).modifiedAt
-                    if (!incomingUuids[localUuid] && localMtime <= incomingMaxMtime) {
-                        remove(d)
-                        changed = true
-                    }
-                }
-            }
-
-            // Only write back when the merge changed something -avoids an infinite
-            // poll→read→save→mtime-change→poll loop. Note: save() bumps the file mtime
-            // so one extra poll cycle fires per sync event; the second loadFromShell
-            // finds changed=false and breaks the cycle.
-            if (changed) {
-                save()
-                modelReloaded()
-            }
-        } catch(e) {
-            console.warn("KDoit loadFromShell:", e)
+            _readWanted = true
+            _afterIo()
+            return
         }
+
+        if (status === "REFUSED") {
+            // The sample tasks were about to land on a non-empty file.
+            _samplesRefused = true
+            if (_pendingSamples) _dropSamples()
+            _readWanted = true
+            _afterIo()
+            return
+        }
+
+        _jobFailed(job, "exit " + exitCode + ": " + (stderr || stdout || ""))
+    }
+
+    function shellTimeout() {
+        if (!_job) return
+        _jobFailed(_job, "timed out")
+    }
+
+    function _jobFailed(job, msg) {
+        _job = null
+        _writeBusy = false
+        if (job.kind === "export") {
+            console.warn("KDoit export failed:", msg)
+            _afterIo()
+            return
+        }
+        console.warn("KDoit save failed:", msg)
+        _writeDirty = true
+        _intent = _maxIntent(_intent, job.intent)
+        storageError = "write"
+        _writeBlocked = true
+        // No automatic retry: the next save, sync poll or Retry re-reads first.
+        if (_readWanted) _afterIo()
+    }
+
+    function isIdle() {
+        return _loaded && !_writeBusy && !_readInFlight && !_writeDirty && !_readWanted && !_exportsPending
     }
 
     function _addDefaultTasks() {
@@ -291,11 +929,13 @@ ListModel {
 
     function load() {
         clear()
-        var arr = _parseConfigJson(plasmoid.configuration.tasksJson)
+        var arr = _parseConfigJson(cfg.tasksJson)
         for (var i = 0; i < arr.length; i++)
             append(normalizeTask(arr[i]))
-        var path = plasmoid.configuration.storagePath
-        if (path !== "") requestFileLoad(path)
+        var tombArr = []
+        try { tombArr = JSON.parse(cfg.tombstonesJson || "[]") } catch (e) { tombArr = [] }
+        _tombs = _pruneTombs(_tombsFromArray(tombArr))
+        requestRead()
     }
 
     function _serializeMarkdown() {
@@ -442,111 +1082,49 @@ ListModel {
         allLines.push("END:VTODO")
     }
 
-    function saveIcs() {
-        try {
-            var path = plasmoid.configuration.storagePath
-            if (path === "") return
-            var icsPath = path.replace(/\.json$/i, ".ics")
-            if (icsPath === path) icsPath = path + ".ics"
+    // Returns the iCalendar text, or null when no task has a due date.
+    function _buildIcs() {
+        var dtstamp = _toIcalTimestamp(new Date().toISOString())
 
-            var dtstamp = _toIcalTimestamp(new Date().toISOString())
+        var allLines = []
+        allLines.push("BEGIN:VCALENDAR")
+        allLines.push("VERSION:2.0")
+        allLines.push("PRODID:-//KDoit//KDoit//EN")
 
-            var allLines = []
-            allLines.push("BEGIN:VCALENDAR")
-            allLines.push("VERSION:2.0")
-            allLines.push("PRODID:-//KDoit//KDoit//EN")
-
-            var vtodoCount = 0
-            for (var i = 0; i < count; i++) {
-                var t = get(i)
-                if (!t.dueDate || t.dueDate === "") continue
-                _addVtodoLines(allLines, t, null, dtstamp)
-                vtodoCount++
-                var sub = t.sublist
-                var subCount = (sub && typeof sub.count === "number") ? sub.count : (sub ? sub.length || 0 : 0)
-                for (var j = 0; j < subCount; j++) {
-                    var s = (sub && typeof sub.get === "function") ? sub.get(j) : sub[j]
-                    _addVtodoLines(allLines, s, t.uuid, dtstamp)
-                }
-            }
-
-            if (vtodoCount === 0) return
-
-            allLines.push("END:VCALENDAR")
-
-            var foldedLines = []
-            for (var f = 0; f < allLines.length; f++) {
-                var segs = _icalFoldLine(allLines[f])
-                for (var k = 0; k < segs.length; k++)
-                    foldedLines.push(segs[k])
-            }
-
-            var ical = foldedLines.join("\r\n")
-            var b64 = _base64(ical)
-            var lastSlash = icsPath.lastIndexOf("/")
-            var dir = lastSlash === -1 ? "." : icsPath.substring(0, lastSlash)
-            var cmd = "mkdir -p " + _shellArg(dir) + " && " +
-                "printf '%s' '" + b64 + "' | base64 -d > " + _shellArg(icsPath + ".tmp") + " && " +
-                "mv -f " + _shellArg(icsPath + ".tmp") + " " + _shellArg(icsPath)
-            runShellCmd(cmd)
-        } catch(e) {
-            console.warn("KDoit saveIcs:", e)
-        }
-    }
-
-    function _saveJsonOnly() {
-        var path = plasmoid.configuration.storagePath
-        if (path === "") return
-        var doc = { version: 1, tasks: [] }
+        var vtodoCount = 0
         for (var i = 0; i < count; i++) {
             var t = get(i)
-            doc.tasks.push({
-                uuid: t.uuid,
-                title: t.title,
-                done: t.done,
-                priority: t.priority,
-                category: t.category,
-                createdAt: t.createdAt,
-                modifiedAt: t.modifiedAt,
-                dueDate: t.dueDate,
-                sublist: normalizeSublist(t.sublist)
-            })
+            if (!t.dueDate || t.dueDate === "") continue
+            _addVtodoLines(allLines, t, null, dtstamp)
+            vtodoCount++
+            var sub = t.sublist
+            var subCount = (sub && typeof sub.count === "number") ? sub.count : (sub ? sub.length || 0 : 0)
+            for (var j = 0; j < subCount; j++) {
+                var s = (sub && typeof sub.get === "function") ? sub.get(j) : sub[j]
+                _addVtodoLines(allLines, s, t.uuid, dtstamp)
+            }
         }
-        var json = JSON.stringify(doc, null, 2)
-        plasmoid.configuration.tasksJson = JSON.stringify(doc.tasks)
-        var b64 = _base64(json)
-        var lastSlash = path.lastIndexOf("/")
-        var dir = lastSlash === -1 ? "." : path.substring(0, lastSlash)
-        var cmd = "mkdir -p " + _shellArg(dir) + " && " +
-            "printf '%s' '" + b64 + "' | base64 -d > " + _shellArg(path + ".tmp") + " && " +
-            "mv -f " + _shellArg(path + ".tmp") + " " + _shellArg(path)
-        runShellCmd(cmd)
-        if (!plasmoid.configuration.migratedToFile)
-            plasmoid.configuration.migratedToFile = true
+
+        if (vtodoCount === 0) return null
+
+        allLines.push("END:VCALENDAR")
+
+        var foldedLines = []
+        for (var f = 0; f < allLines.length; f++) {
+            var segs = _icalFoldLine(allLines[f])
+            for (var k = 0; k < segs.length; k++)
+                foldedLines.push(segs[k])
+        }
+        return foldedLines.join("\r\n")
     }
 
-    function save() {
-        _saveJsonOnly()
-        if (plasmoid.configuration.enableIcsExport)
-            saveIcs()
-        if (plasmoid.configuration.markdownExport) {
-            var path = plasmoid.configuration.storagePath
-            if (path === "") return
-            var mdPath = plasmoid.configuration.markdownPath
-            if (mdPath === "") {
-                mdPath = path.replace(/\.json$/i, ".md")
-                if (mdPath === path) mdPath = path + ".md"
-            }
-            if (mdPath === path) return
-            var md = _serializeMarkdown()
-            var mdB64 = _base64(md)
-            var mdLastSlash = mdPath.lastIndexOf("/")
-            var mdDir = mdLastSlash === -1 ? "." : mdPath.substring(0, mdLastSlash)
-            var mdCmd = "mkdir -p " + _shellArg(mdDir) + " && " +
-                "printf '%s' '" + mdB64 + "' | base64 -d > " + _shellArg(mdPath + ".tmp") + " && " +
-                "mv -f " + _shellArg(mdPath + ".tmp") + " " + _shellArg(mdPath)
-            runShellCmd(mdCmd)
-        }
+    // Records the change in the widget-settings copy right away, then queues a
+    // file write. intent: "user" (default), "merge", "destructive", "defaults".
+    function save(intent) {
+        _updateConfigCopy()
+        _writeDirty = true
+        _intent = _maxIntent(_intent, intent || "user")
+        _pump()
     }
 
     function _parseMarkdown(md) {
@@ -633,7 +1211,7 @@ ListModel {
         var imported = 0
         var updated = 0
         var now = new Date().toISOString()
-        var addToTop = plasmoid.configuration.addToTop
+        var addToTop = cfg.addToTop
         var byUuid = {}
         for (var i = 0; i < count; i++) {
             var cur = get(i)
@@ -737,6 +1315,7 @@ ListModel {
 
     function removeTask(index) {
         if (index < 0 || index >= count) return
+        _addTomb(get(index).uuid)
         remove(index)
         save()
     }
@@ -744,8 +1323,10 @@ ListModel {
     function removeTasks(indices) {
         var sorted = indices.slice().sort(function(a, b) { return b - a })
         for (var i = 0; i < sorted.length; i++) {
-            if (sorted[i] >= 0 && sorted[i] < count)
+            if (sorted[i] >= 0 && sorted[i] < count) {
+                _addTomb(get(sorted[i]).uuid)
                 remove(sorted[i], 1)
+            }
         }
         save()
     }
@@ -777,8 +1358,11 @@ ListModel {
         save()
     }
 
-    function insertTask(index, task) {
+    // Re-inserts a deleted task (undo) without saving. The tombstone is dropped
+    // and modifiedAt bumped so a tombstone already synced elsewhere loses.
+    function restoreTask(index, task) {
         var t = normalizeTask(task)
+        _removeTomb(t.uuid)
         var clamped = Math.max(0, Math.min(index, count))
         insert(clamped, {
             uuid: t.uuid,
@@ -787,10 +1371,14 @@ ListModel {
             priority: t.priority,
             category: t.category,
             createdAt: t.createdAt,
-            modifiedAt: t.modifiedAt,
+            modifiedAt: new Date().toISOString(),
             dueDate: t.dueDate,
             sublist: normalizeSublist(t.sublist)
         })
+    }
+
+    function insertTask(index, task) {
+        restoreTask(index, task)
         save()
     }
 
@@ -798,6 +1386,7 @@ ListModel {
         var changed = false
         for (var i = count - 1; i >= 0; i--) {
             if (get(i).done === true) {
+                _addTomb(get(i).uuid)
                 remove(i)
                 changed = true
             }
@@ -848,15 +1437,17 @@ ListModel {
     }
 
     Component.onCompleted: {
-        var path = plasmoid.configuration.storagePath
-        if (path === "") {
-            var dataHome = StandardPaths.writableLocation(StandardPaths.GenericDataLocation).toString()
-            if (dataHome.startsWith("file://"))
-                dataHome = dataHome.substring(7)
-            plasmoid.configuration.storagePath = dataHome + "/kdoit/tasks.json"
-        } else if (path.startsWith("file://")) {
-            plasmoid.configuration.storagePath = path.substring(7)
+        if (!cfg) {
+            console.warn("KDoit TaskModel: no cfg object; storage disabled")
+            return
         }
+        _tmpToken = _randomHex(8)
+        var p = _normalizePath(cfg.storagePath)
+        if (p === "") p = _defaultPath()
+        _path = p
+        if (cfg.storagePath !== p)
+            cfg.storagePath = p
         load()
+        _started = true
     }
 }
