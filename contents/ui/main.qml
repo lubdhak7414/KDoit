@@ -84,6 +84,19 @@ PlasmoidItem {
         return Object.keys(selectedIndices).length
     }
 
+    // The selection is kept by row index, so drop it whenever rows shift
+    // (e.g. a task added at the top) or the filter changes what is visible;
+    // otherwise "Delete selected" would hit other or hidden tasks.
+    Connections {
+        target: root.currentModel
+        function onRowsInserted() { root.clearSelection() }
+        function onRowsRemoved() { root.clearSelection() }
+        function onRowsMoved() { root.clearSelection() }
+        function onModelReset() { root.clearSelection() }
+    }
+    onSearchTextChanged: clearSelection()
+    onCategoryFilterChanged: clearSelection()
+
     function deleteSelected() {
         var indices = Object.keys(selectedIndices).map(Number)
         if (indices.length === 0)
@@ -342,6 +355,9 @@ PlasmoidItem {
         }
         function onStoragePathChanged() {
             taskModel.storagePathChanged()
+        }
+        function onHideCompletedChanged() {
+            root.clearSelection()
         }
     }
 
