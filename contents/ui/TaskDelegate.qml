@@ -18,6 +18,9 @@ PlasmaComponents.ItemDelegate {
     required property var sublist
 
     property ListView listView: ListView.view
+    // The ListModel rows are edited in; the view's own model may be a
+    // DelegateModel that filters it.
+    property var sourceModel: listView ? listView.model : null
     property real gridSize: Kirigami.Units.gridUnit * 2
     property bool matched: true
     property bool dragEnabled: true
@@ -61,8 +64,8 @@ PlasmaComponents.ItemDelegate {
     signal dropping()
 
     function emitTaskChanged() {
-        if (typeof delegate.listView.model.touch === "function")
-            delegate.listView.model.touch(delegate.index)
+        if (typeof delegate.sourceModel.touch === "function")
+            delegate.sourceModel.touch(delegate.index)
         delegate.taskChanged()
     }
 
@@ -293,8 +296,8 @@ PlasmaComponents.ItemDelegate {
                 delegate.dropping()
                 delegate.isDragging = false
                 delegate.dragOffsetY = 0
-                if (from !== to && typeof delegate.listView.model.moveTask === "function") {
-                    delegate.listView.model.moveTask(from, to)
+                if (from !== to && typeof delegate.sourceModel.moveTask === "function") {
+                    delegate.sourceModel.moveTask(from, to)
                     root.clearSelection()
                 }
             } else if (delegate._pressPending) {
@@ -348,7 +351,7 @@ PlasmaComponents.ItemDelegate {
                 value: delegate.done
             }
             onToggled: {
-                delegate.listView.model.setProperty(delegate.index, "done", checked)
+                delegate.sourceModel.setProperty(delegate.index, "done", checked)
                 delegate.emitTaskChanged()
             }
         }
@@ -471,7 +474,7 @@ PlasmaComponents.ItemDelegate {
                         text: i18n("Today")
                         onTriggered: {
                             var d = new Date()
-                            delegate.listView.model.setProperty(delegate.index, "dueDate", delegate.toIso(d))
+                            delegate.sourceModel.setProperty(delegate.index, "dueDate", delegate.toIso(d))
                             delegate.emitTaskChanged()
                         }
                     }
@@ -480,7 +483,7 @@ PlasmaComponents.ItemDelegate {
                         onTriggered: {
                             var d = new Date()
                             d.setDate(d.getDate() + 1)
-                            delegate.listView.model.setProperty(delegate.index, "dueDate", delegate.toIso(d))
+                            delegate.sourceModel.setProperty(delegate.index, "dueDate", delegate.toIso(d))
                             delegate.emitTaskChanged()
                         }
                     }
@@ -491,7 +494,7 @@ PlasmaComponents.ItemDelegate {
                     Controls.MenuItem {
                         text: i18n("Delete date")
                         onTriggered: {
-                            delegate.listView.model.setProperty(delegate.index, "dueDate", "")
+                            delegate.sourceModel.setProperty(delegate.index, "dueDate", "")
                             delegate.emitTaskChanged()
                         }
                     }
@@ -503,21 +506,21 @@ PlasmaComponents.ItemDelegate {
                     Controls.MenuItem {
                         text: i18n("High")
                         onTriggered: {
-                            delegate.listView.model.setProperty(delegate.index, "priority", 2)
+                            delegate.sourceModel.setProperty(delegate.index, "priority", 2)
                             delegate.emitTaskChanged()
                         }
                     }
                     Controls.MenuItem {
                         text: i18n("Medium")
                         onTriggered: {
-                            delegate.listView.model.setProperty(delegate.index, "priority", 1)
+                            delegate.sourceModel.setProperty(delegate.index, "priority", 1)
                             delegate.emitTaskChanged()
                         }
                     }
                     Controls.MenuItem {
                         text: i18n("Low")
                         onTriggered: {
-                            delegate.listView.model.setProperty(delegate.index, "priority", 0)
+                            delegate.sourceModel.setProperty(delegate.index, "priority", 0)
                             delegate.emitTaskChanged()
                         }
                     }
@@ -529,7 +532,7 @@ PlasmaComponents.ItemDelegate {
                     Controls.MenuItem {
                         text: i18n("None")
                         onTriggered: {
-                            delegate.listView.model.setProperty(delegate.index, "category", "")
+                            delegate.sourceModel.setProperty(delegate.index, "category", "")
                             delegate.emitTaskChanged()
                         }
                     }
@@ -542,7 +545,7 @@ PlasmaComponents.ItemDelegate {
                             required property string modelData
                             text: modelData
                             onTriggered: {
-                                delegate.listView.model.setProperty(delegate.index, "category", modelData)
+                                delegate.sourceModel.setProperty(delegate.index, "category", modelData)
                                 delegate.emitTaskChanged()
                             }
                         }
@@ -661,7 +664,7 @@ PlasmaComponents.ItemDelegate {
                                 var m = monthSpin.value
                                 var day = daySpin.value
                                 var iso = yearSpin.value + "-" + (m < 10 ? "0" + m : m) + "-" + (day < 10 ? "0" + day : day)
-                                delegate.listView.model.setProperty(delegate.index, "dueDate", iso)
+                                delegate.sourceModel.setProperty(delegate.index, "dueDate", iso)
                                 delegate.emitTaskChanged()
                                 dateDialog.close()
                             }
@@ -695,7 +698,7 @@ PlasmaComponents.ItemDelegate {
                         onAccepted: {
                             var text = renameField.text.trim()
                             if (text.length > 0) {
-                                delegate.listView.model.setProperty(delegate.index, "title", text)
+                                delegate.sourceModel.setProperty(delegate.index, "title", text)
                                 delegate.emitTaskChanged()
                             }
                             renameDialog.close()
@@ -718,7 +721,7 @@ PlasmaComponents.ItemDelegate {
                             onClicked: {
                                 var text = renameField.text.trim()
                                 if (text.length > 0) {
-                                    delegate.listView.model.setProperty(delegate.index, "title", text)
+                                    delegate.sourceModel.setProperty(delegate.index, "title", text)
                                     delegate.emitTaskChanged()
                                 }
                                 renameDialog.close()
@@ -755,7 +758,7 @@ PlasmaComponents.ItemDelegate {
                             var text = categoryField.text.trim()
                             if (text.length > 0) {
                                 root.addManagedCategory(text)
-                                delegate.listView.model.setProperty(delegate.index, "category", text)
+                                delegate.sourceModel.setProperty(delegate.index, "category", text)
                                 delegate.emitTaskChanged()
                             }
                             categoryDialog.close()
@@ -779,7 +782,7 @@ PlasmaComponents.ItemDelegate {
                                 var text = categoryField.text.trim()
                                 if (text.length > 0) {
                                     root.addManagedCategory(text)
-                                    delegate.listView.model.setProperty(delegate.index, "category", text)
+                                    delegate.sourceModel.setProperty(delegate.index, "category", text)
                                     delegate.emitTaskChanged()
                                 }
                                 categoryDialog.close()

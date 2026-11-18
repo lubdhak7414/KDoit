@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as Controls
 import QtQuick.Window
+import QtQml.Models
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.components 3.0 as PlasmaComponents
@@ -837,7 +838,7 @@ PlasmoidItem {
 
                 ListView {
                     id: taskList
-                    model: root.currentModel
+                    model: visualModel
                     spacing: 0
 
                     property bool currentDragActive: false
@@ -854,35 +855,87 @@ PlasmoidItem {
                         NumberAnimation { property: "y"; duration: 150; easing.type: Easing.OutCubic }
                     }
 
-                    delegate: TaskDelegate {
-                        matched: root.matchesFilter(title, done, category || "")
-                        dragEnabled: !root.isFiltering && !root.isSublistView()
-                        isSublistItem: root.isSublistView()
-                        onTaskDeleted: root.deleteCurrent(index)
-                        onDrillIntoSublist: function (taskIndex) {
-                            if (!root.isSublistView())
-                                root.enterSublist(taskIndex)
+                    // Rows the filter hides are left out of the view entirely, so
+                    // no delegate is built for them (a zero-height row still is).
+                    // Delegates keep the source row as their index.
+                    DelegateModel {
+                        id: visualModel
+                        model: root.currentModel
+                        groups: DelegateModelGroup {
+                            name: "shown"
+                            includeByDefault: true
                         }
-                        onTaskChanged: {
-                            root._updateTrigger++
-                            root.updateDistinctCategories()
-                            if (root.isSublistView())
-                                root.syncSublist()
-                            else
-                                taskModel.save()
+                        filterOnGroup: "shown"
+                        delegate: taskDelegate
+
+                        function refilter() {
+                            for (var i = 0; i < items.count; i++) {
+                                var it = items.get(i)
+                                var m = it.model
+                                var show = root.matchesFilter(m.title, m.done, m.category || "")
+                                if (it.inShown !== show)
+                                    it.inShown = show
+                            }
                         }
-                        onDragStarted: function (idx) {
-                            taskList.dragSourceIndex = idx
-                            taskList.dropTargetIndex = idx
-                            taskList.currentDragActive = true
+
+                        function scheduleRefilter() {
+                            Qt.callLater(refilter)
                         }
-                        onDropTargetChanged: function (idx) {
-                            taskList.dropTargetIndex = idx
-                        }
-                        onDropping: {
-                            taskList.isDropping = true
-                            taskList.resetAllTransforms()
-                            dropResetTimer.restart()
+                    }
+
+                    Connections {
+                        target: root.currentModel
+                        function onRowsInserted() { visualModel.scheduleRefilter() }
+                        function onDataChanged() { visualModel.scheduleRefilter() }
+                        function onModelReset() { visualModel.scheduleRefilter() }
+                    }
+                    Connections {
+                        target: root
+                        function onSearchTextChanged() { visualModel.scheduleRefilter() }
+                        function onCategoryFilterChanged() { visualModel.scheduleRefilter() }
+                        function onCurrentModelChanged() { visualModel.scheduleRefilter() }
+                    }
+                    Connections {
+                        target: plasmoid.configuration
+                        function onHideCompletedChanged() { visualModel.scheduleRefilter() }
+                    }
+
+                    Component {
+                        id: taskDelegate
+
+                        TaskDelegate {
+                            sourceModel: root.currentModel
+                            // Still bound, so a row is hidden at once, before the
+                            // coalesced refilter takes it out of the view.
+                            matched: root.matchesFilter(title, done, category || "")
+                            dragEnabled: !root.isFiltering && !root.isSublistView()
+                            isSublistItem: root.isSublistView()
+                            onTaskDeleted: root.deleteCurrent(index)
+                            onDrillIntoSublist: function (taskIndex) {
+                                if (!root.isSublistView())
+                                    root.enterSublist(taskIndex)
+                            }
+                            onTaskChanged: {
+                                root._updateTrigger++
+                                root.updateDistinctCategories()
+                                if (root.isSublistView())
+                                    root.syncSublist()
+                                else
+                                    taskModel.save()
+                            }
+                            onDragStarted: function (idx) {
+                                taskList.dragSourceIndex = idx
+                                taskList.dropTargetIndex = idx
+                                taskList.currentDragActive = true
+                            }
+                            onDropTargetChanged: function (idx) {
+                                taskList.dropTargetIndex = idx
+                            }
+                            onDropping: {
+                                taskList.isDropping = true
+                                taskList.resetAllTransforms()
+                                dropResetTimer.restart()
+                            }
                         }
                     }
 
