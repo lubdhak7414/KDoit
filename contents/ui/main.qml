@@ -570,7 +570,10 @@ PlasmoidItem {
         for (var k in cats)
             arr.push(k)
         arr.sort()
-        distinctCategories = arr
+        // Reassigning resets the category combo's model, so only do it when
+        // the list really changed (this runs after every task edit).
+        if (JSON.stringify(arr) !== JSON.stringify(distinctCategories))
+            distinctCategories = arr
         if (categoryFilter !== "" && cats[categoryFilter] === undefined)
             categoryFilter = ""
     }
@@ -727,23 +730,29 @@ PlasmoidItem {
                     Layout.fillWidth: true
                 }
 
-                PlasmaComponents.ComboBox {
-                    id: categoryCombo
-                    visible: root.distinctCategories.length > 0 && !root.isSublistView()
+                // Only created while there are categories to pick from. Created
+                // hidden or directly in the row, PlasmaComponents.ComboBox logs
+                // "Binding loop detected for property implicitWidth" (Plasma's
+                // own panel settings do too); loaded like this it does not.
+                Loader {
+                    active: root.distinctCategories.length > 0 && !root.isSublistView()
+                    visible: active
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 6
-                    model: [i18n("All")].concat(root.distinctCategories)
-                    Binding on currentIndex {
-                        value: {
-                            if (root.categoryFilter === "") return 0
-                            var idx = root.distinctCategories.indexOf(root.categoryFilter)
-                            return idx >= 0 ? idx + 1 : 0
+                    sourceComponent: PlasmaComponents.ComboBox {
+                        model: [i18n("All")].concat(root.distinctCategories)
+                        Binding on currentIndex {
+                            value: {
+                                if (root.categoryFilter === "") return 0
+                                var idx = root.distinctCategories.indexOf(root.categoryFilter)
+                                return idx >= 0 ? idx + 1 : 0
+                            }
                         }
-                    }
-                    onActivated: function(index) {
-                        if (index === 0)
-                            root.categoryFilter = ""
-                        else
-                            root.categoryFilter = root.distinctCategories[index - 1]
+                        onActivated: function(index) {
+                            if (index === 0)
+                                root.categoryFilter = ""
+                            else
+                                root.categoryFilter = root.distinctCategories[index - 1]
+                        }
                     }
                 }
 
