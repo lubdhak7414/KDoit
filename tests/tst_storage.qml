@@ -467,6 +467,8 @@ TestCase {
         settle(h)
         verify(readFile(d + "/tasks.md").indexOf("kdoit-id:u-a") !== -1)
         verify(readFile(d + "/tasks.ics").indexOf("UID:u-a") !== -1)
+        compare(run("tail -c 2 -- " + q(d + "/tasks.ics") + " | od -An -tx1").out.trim(), "0d 0a",
+                "ics must end with CRLF")
         noTmpLeftovers(d)
     }
 

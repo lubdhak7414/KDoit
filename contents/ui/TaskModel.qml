@@ -1171,7 +1171,8 @@ ListModel {
             for (var k = 0; k < segs.length; k++)
                 foldedLines.push(segs[k])
         }
-        return foldedLines.join("\r\n")
+        // RFC 5545: every content line, including the last, ends with CRLF.
+        return foldedLines.join("\r\n") + "\r\n"
     }
 
     // Records the change in the widget-settings copy right away, then queues a
