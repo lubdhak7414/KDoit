@@ -336,7 +336,9 @@ PlasmaComponents.ItemDelegate {
         PlasmaComponents.Label {
             visible: delegate.sublistCount() > 0
             text: delegate.sublistDone() + "/" + delegate.sublistCount()
-            color: Kirigami.Theme.highlightColor
+            color: plasmoid.configuration.countColor !== ""
+                   ? plasmoid.configuration.countColor
+                   : Kirigami.Theme.highlightColor
             font.pointSize: Kirigami.Theme.smallFont.pointSize
 
             MouseArea {

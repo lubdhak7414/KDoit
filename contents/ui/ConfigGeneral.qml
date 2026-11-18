@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import org.kde.plasma.components 3.0 as PlasmaComponents
+import QtQuick.Dialogs
 import org.kde.kirigami as Kirigami
 
 Kirigami.Page {
@@ -10,6 +11,8 @@ Kirigami.Page {
     property int cfg_defaultPriorityDefault: 0
     property bool cfg_showPriority
     property bool cfg_showPriorityDefault: true
+    property string cfg_countColor
+    property string cfg_countColorDefault: ""
     property bool cfg_addToTop
     property bool cfg_addToTopDefault: false
     property bool cfg_hideCompleted
@@ -192,6 +195,37 @@ Kirigami.Page {
             color: Kirigami.Theme.disabledTextColor
             wrapMode: Text.WordWrap
             Layout.maximumWidth: Kirigami.Units.gridUnit * 20
+        }
+
+        RowLayout {
+            Kirigami.FormData.label: i18n("Sublist count color:")
+            spacing: Kirigami.Units.smallSpacing
+
+            PlasmaComponents.Button {
+                id: countColorButton
+                text: root.cfg_countColor === "" ? i18n("Accent color (default)") : root.cfg_countColor
+                icon.name: "color-management"
+                onClicked: countColorDialog.open()
+            }
+            Rectangle {
+                Layout.preferredWidth: Kirigami.Units.gridUnit
+                Layout.preferredHeight: Kirigami.Units.gridUnit
+                radius: 3
+                color: root.cfg_countColor === "" ? Kirigami.Theme.highlightColor : root.cfg_countColor
+                border.color: Kirigami.Theme.disabledTextColor
+            }
+            PlasmaComponents.Button {
+                visible: root.cfg_countColor !== ""
+                text: i18n("Reset")
+                icon.name: "edit-reset"
+                onClicked: root.cfg_countColor = ""
+            }
+            ColorDialog {
+                id: countColorDialog
+                title: i18n("Sublist count color")
+                selectedColor: root.cfg_countColor === "" ? Kirigami.Theme.highlightColor : root.cfg_countColor
+                onAccepted: root.cfg_countColor = selectedColor.toString()
+            }
         }
 
         PlasmaComponents.CheckBox {

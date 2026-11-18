@@ -29,6 +29,10 @@
             <label>Show color stripe on the left edge of each task to indicate priority</label>
             <default>true</default>
         </entry>
+        <entry name="countColor" type="String">
+            <label>Color of the sublist progress count (empty = theme accent color)</label>
+            <default></default>
+        </entry>
         <entry name="addToTop" type="Bool">
             <label>Insert new tasks at the top of the list instead of the bottom</label>
             <default>false</default>
