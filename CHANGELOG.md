@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.2.0
+
+### New feature
+- New setting to choose the color of the sublist count (for example 2/5). By default it keeps the theme accent color.
+
+### Fixed
+- In thin panels the widget now shows an icon that opens the full list in a popup, instead of a cut-off title bar. The full list is still embedded on the desktop and in panels large enough to fit it.
+- A tasks file with unexpected values (for example a number as a title, or an empty sublist entry) no longer causes tasks to be skipped and then removed on the next save.
+- "Delete selected" can no longer remove tasks other than the ones selected after tasks were added, imported or filtered.
+- An open sublist now refreshes correctly after a sync.
+- Today, Tomorrow and overdue labels now update at midnight.
+- Markdown import reads the same file the export writes.
+- The iCalendar export now ends with a proper line ending.
+- The settings page scrolls, uses standard desktop controls, and lets the storage path, Markdown path and title be cleared.
+- Removed the binding loop warnings the widget logged on every start.
+
+### Faster
+- Large lists open and filter much faster: filtering 300 tasks went from about 1.3 s to 70 ms.
+- Each task row is about 5 times cheaper to build, since its menus and dialogs are created only when used.
+- Saving is about 6 times faster, and the tasks file is no longer rewritten when nothing changed, so sync tools don't re-download it.
+
 ## 1.1.0
 
 ### New feature

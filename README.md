@@ -55,7 +55,8 @@ Right-click the widget → Configure:
 | Setting | Default | Notes |
 |---------|---------|-------|
 | Storage path | `~/.local/share/kdoit/tasks.json` | Point multiple machines at the same synced folder |
-| Default priority | Medium | Priority assigned to new tasks |
+| Default priority | Low | Priority assigned to new tasks |
+| Sublist count color | Accent color | Color of the done/total count on tasks with sublists |
 | Hide completed | Off | Collapses done tasks from view |
 | Add to top | Off | Inserts new tasks at the top instead of the bottom |
 | Live sync | Off | Enable only when sharing the file across machines |
