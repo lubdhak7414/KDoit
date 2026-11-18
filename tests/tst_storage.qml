@@ -488,6 +488,15 @@ TestCase {
         settle(h)
     }
 
+    function test_16_markdown_path() {
+        var d = mkdir("t16")
+        var h = harness({ storagePath: d + "/Tasks.JSON", migratedToFile: true })
+        settle(h)
+        compare(h.model._mdPath(), d + "/Tasks.md")
+        h.cfg.markdownPath = "file://" + d + "/my%20notes.md"
+        compare(h.model._mdPath(), d + "/my notes.md")
+    }
+
     function test_14_malformed_fields_keep_every_task() {
         var d = mkdir("t14")
         var p = d + "/tasks.json"

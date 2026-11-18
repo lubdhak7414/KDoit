@@ -1026,23 +1026,10 @@ PlasmoidItem {
             id: importDialog
             title: i18n("Import from Markdown")
             standardButtons: Kirigami.Dialog.Ok | Kirigami.Dialog.Cancel
-            onAccepted: {
-                var mdPath = plasmoid.configuration.markdownPath
-                if (mdPath === "") {
-                    mdPath = plasmoid.configuration.storagePath.replace(/\.json$/, ".md")
-                    if (mdPath === plasmoid.configuration.storagePath) mdPath = plasmoid.configuration.storagePath + ".md"
-                }
-                mdReader.run(mdPath)
-            }
+            // Same path the Markdown export writes to.
+            onAccepted: mdReader.run(taskModel._mdPath())
             PlasmaComponents.Label {
-                text: {
-                    var p = plasmoid.configuration.markdownPath
-                    if (p === "") {
-                        p = plasmoid.configuration.storagePath.replace(/\.json$/, ".md")
-                        if (p === plasmoid.configuration.storagePath) p = plasmoid.configuration.storagePath + ".md"
-                    }
-                    return p
-                }
+                text: taskModel._mdPath()
                 wrapMode: Text.WrapAnywhere
             }
         }
