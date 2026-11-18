@@ -129,6 +129,37 @@ KCM.SimpleKCM {
             onToggled: root.cfg_showPriority = checked
         }
 
+        RowLayout {
+            Kirigami.FormData.label: i18n("Sublist count color:")
+            spacing: Kirigami.Units.smallSpacing
+
+            QQC2.Button {
+                id: countColorButton
+                text: root.cfg_countColor === "" ? i18n("Accent color (default)") : root.cfg_countColor
+                icon.name: "color-management"
+                onClicked: countColorDialog.open()
+            }
+            Rectangle {
+                Layout.preferredWidth: Kirigami.Units.gridUnit
+                Layout.preferredHeight: Kirigami.Units.gridUnit
+                radius: 3
+                color: root.cfg_countColor === "" ? Kirigami.Theme.highlightColor : root.cfg_countColor
+                border.color: Kirigami.Theme.disabledTextColor
+            }
+            QQC2.Button {
+                visible: root.cfg_countColor !== ""
+                text: i18n("Reset")
+                icon.name: "edit-reset"
+                onClicked: root.cfg_countColor = ""
+            }
+            ColorDialog {
+                id: countColorDialog
+                title: i18n("Sublist count color")
+                selectedColor: root.cfg_countColor === "" ? Kirigami.Theme.highlightColor : root.cfg_countColor
+                onAccepted: root.cfg_countColor = selectedColor.toString()
+            }
+        }
+
         QQC2.CheckBox {
             Kirigami.FormData.label: i18n("New tasks:")
             text: i18n("Add to top of list")
@@ -204,37 +235,6 @@ KCM.SimpleKCM {
             color: Kirigami.Theme.disabledTextColor
             wrapMode: Text.WordWrap
             Layout.maximumWidth: Kirigami.Units.gridUnit * 20
-        }
-
-        RowLayout {
-            Kirigami.FormData.label: i18n("Sublist count color:")
-            spacing: Kirigami.Units.smallSpacing
-
-            QQC2.Button {
-                id: countColorButton
-                text: root.cfg_countColor === "" ? i18n("Accent color (default)") : root.cfg_countColor
-                icon.name: "color-management"
-                onClicked: countColorDialog.open()
-            }
-            Rectangle {
-                Layout.preferredWidth: Kirigami.Units.gridUnit
-                Layout.preferredHeight: Kirigami.Units.gridUnit
-                radius: 3
-                color: root.cfg_countColor === "" ? Kirigami.Theme.highlightColor : root.cfg_countColor
-                border.color: Kirigami.Theme.disabledTextColor
-            }
-            QQC2.Button {
-                visible: root.cfg_countColor !== ""
-                text: i18n("Reset")
-                icon.name: "edit-reset"
-                onClicked: root.cfg_countColor = ""
-            }
-            ColorDialog {
-                id: countColorDialog
-                title: i18n("Sublist count color")
-                selectedColor: root.cfg_countColor === "" ? Kirigami.Theme.highlightColor : root.cfg_countColor
-                onAccepted: root.cfg_countColor = selectedColor.toString()
-            }
         }
 
         QQC2.CheckBox {
