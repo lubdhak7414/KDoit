@@ -36,6 +36,10 @@ ListModel {
     property bool _writeBlocked: false
     property string _intent: ""
     property string _fileSig: ""
+    // The exact text of the file at _fileSig when known (last parsed read or
+    // our last write), else "". A save that would write the same text again
+    // is skipped.
+    property string _fileText: ""
     property string _tmpToken: ""
     property int _cmdSeq: 0
     property var _job: null
@@ -470,6 +474,7 @@ ListModel {
         if (st === "UNREADABLE" || st === "NODIR") {
             // Never inject samples, never write; keep whatever is in memory.
             _fileSig = ""
+            _fileText = ""
             _writeBlocked = true
             storageError = st === "NODIR" ? "nodir" : "unreadable"
             _loaded = true
@@ -479,6 +484,7 @@ ListModel {
 
         if (st === "MISSING" || st === "EMPTY") {
             _fileSig = st === "MISSING" ? "MISSING" : r.sig
+            _fileText = ""
             _writeBlocked = false
             _clearReadError()
             if (count === 0) {
@@ -494,6 +500,7 @@ ListModel {
         // OK with content
         _fileSig = r.sig
         var parsed = _parseDoc(r.content)
+        _fileText = parsed === null ? "" : r.content
         if (parsed === null) {
             console.warn("KDoit: tasks file", _path, "could not be parsed")
             if (count === 0) {
@@ -650,6 +657,7 @@ ListModel {
         if (p === _path) return
         _path = p
         _fileSig = ""
+        _fileText = ""
         _loaded = false
         _noDeleteNextLoad = true
         _writeBlocked = false
@@ -754,8 +762,18 @@ ListModel {
                 _writeDirty = false
                 _intent = ""
             } else {
-                _startJsonWrite()
-                return
+                var text = _serializeDoc()
+                if (text !== _fileText) {
+                    _startJsonWrite(text)
+                    return
+                }
+                // The file already holds exactly this (e.g. a merge where the
+                // file won everything): skip the write, backup and snapshot,
+                // which would only bump the file's mtime and make sync tools
+                // and other machines fetch it again.
+                _writeDirty = false
+                _intent = ""
+                _savedToFile()
             }
         }
         if (_exportsPending) {
@@ -773,15 +791,26 @@ ListModel {
         if (!_writeBlocked) _pump()
     }
 
-    function _startJsonWrite() {
+    function _startJsonWrite(text) {
         var intent = _intent || "user"
         _writeDirty = false
         _intent = ""
         var snap = intent === "destructive" || !_sessionSnapshotDone
-        var cmds = _buildWriteCmds(_path, _serializeDoc(), {
+        var cmds = _buildWriteCmds(_path, text, {
             cas: true, expectSig: _fileSig, intent: intent, backup: true, snapshot: snap
         })
-        _startJob({ kind: "json", path: _path, cmds: cmds, intent: intent })
+        _startJob({ kind: "json", path: _path, cmds: cmds, intent: intent, text: text })
+    }
+
+    // State after the file is known to hold the current tasks.
+    function _savedToFile() {
+        if (cfg.migratedToFile !== true)
+            cfg.migratedToFile = true
+        storageError = ""
+        _writeBlocked = false
+        _conflictRetries = 0
+        if (cfg.markdownExport || cfg.enableIcsExport)
+            _exportsPending = true
     }
 
     function _startExports() {
@@ -837,16 +866,11 @@ ListModel {
         if (exitCode === 0 && status === "OK") {
             if (job.path === _path) {
                 _fileSig = (m[2] || "").trim()
-                if (cfg.migratedToFile !== true)
-                    cfg.migratedToFile = true
-                storageError = ""
-                _writeBlocked = false
-                _conflictRetries = 0
+                _fileText = job.text
+                _savedToFile()
                 _pendingSamples = false
                 _sampleUuids = {}
                 _sessionSnapshotDone = true
-                if (cfg.markdownExport || cfg.enableIcsExport)
-                    _exportsPending = true
             }
             _afterIo()
             return
@@ -854,6 +878,7 @@ ListModel {
 
         if (status === "CONFLICT") {
             _conflictCount++
+            _fileText = ""
             _writeDirty = true
             _intent = _maxIntent(_intent, job.intent)
             _conflictRetries++
@@ -894,6 +919,7 @@ ListModel {
             return
         }
         console.warn("KDoit save failed:", msg)
+        _fileText = ""
         _writeDirty = true
         _intent = _maxIntent(_intent, job.intent)
         storageError = "write"

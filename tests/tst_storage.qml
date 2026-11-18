@@ -499,6 +499,31 @@ TestCase {
         compare(h.model._mdPath(), d + "/my notes.md")
     }
 
+    function test_17_unchanged_content_is_not_rewritten() {
+        var d = mkdir("t17")
+        var p = d + "/tasks.json"
+        // A second widget on the same file starts with an older settings copy:
+        // the file wins the merge and nothing is left to write.
+        var fresh = [task("u-a", "A2", "2025-06-01T00:00:00.000Z"),
+                     task("u-b", "B", "2025-01-01T00:00:00.000Z")]
+        var h0 = harness({ storagePath: p, migratedToFile: true, tasksJson: JSON.stringify(fresh) })
+        h0.model.save()
+        settle(h0)
+        var sig = run("stat -c '%y %s' -- " + q(p)).out
+        var stale = [task("u-a", "A", "2025-01-01T00:00:00.000Z")]
+        var h = harness({ storagePath: p, migratedToFile: true, tasksJson: JSON.stringify(stale) })
+        settle(h)
+        compare(titles(h.model), ["A2", "B"])
+        compare(h.shellCmds, 0, "rewrote an unchanged file")
+        compare(run("stat -c '%y %s' -- " + q(p)).out, sig)
+        compare(JSON.stringify(JSON.parse(h.cfg.tasksJson)), JSON.stringify(h.model._tasksArray()),
+                "settings copy must still be refreshed")
+        // A real change is still written.
+        h.model.addTask("C", 1, false)
+        settle(h)
+        compare(fileTitles(p), ["A2", "B", "C"])
+    }
+
     function test_14_malformed_fields_keep_every_task() {
         var d = mkdir("t14")
         var p = d + "/tasks.json"
