@@ -1,7 +1,9 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as Controls
+import QtQuick.Window
 import org.kde.plasma.plasmoid
+import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.components 3.0 as PlasmaComponents
 import org.kde.plasma.extras 2.0 as PlasmaExtras
 import org.kde.plasma.plasma5support as Plasma5Support
@@ -141,6 +143,37 @@ PlasmoidItem {
     }
 
     preferredRepresentation: fullRepresentation
+
+    // On Wayland a panel is a layer-shell surface that never takes keyboard
+    // focus. While a text field in the embedded view is active, ask the panel
+    // for keyboard focus (AcceptingInputStatus), otherwise stay ActiveStatus.
+    // Not needed on the desktop, where the view is a normal window.
+    property Item _inputItem: null
+    property bool _inputSettling: false
+    readonly property bool _wantsKeyboard: _inputItem !== null
+                                           && Plasmoid.formFactor !== PlasmaCore.Types.Planar
+    Plasmoid.status: _wantsKeyboard ? PlasmaCore.Types.AcceptingInputStatus
+                                    : PlasmaCore.Types.ActiveStatus
+
+    // Becoming AcceptingInputStatus makes the panel move focus to the next item
+    // in its focus chain, so give it back to the field once that has happened.
+    on_WantsKeyboardChanged: {
+        if (!_wantsKeyboard)
+            return
+        _inputSettling = true
+        Qt.callLater(function () {
+            if (root._inputItem)
+                root._inputItem.forceActiveFocus()
+            root._inputSettling = false
+        })
+    }
+
+    function _focusChanged(item) {
+        if (item && item.hasOwnProperty("inputMethodComposing") && item.hasOwnProperty("echoMode"))
+            _inputItem = item
+        else if (!_inputSettling)
+            _inputItem = null
+    }
 
     Plasmoid.icon: "view-task"
 
@@ -599,6 +632,15 @@ PlasmoidItem {
     }
 
     fullRepresentation: Item {
+        id: fullRep
+
+        Connections {
+            target: fullRep.Window.window
+            function onActiveFocusItemChanged() {
+                root._focusChanged(fullRep.Window.window.activeFocusItem)
+            }
+        }
+
         Layout.minimumWidth: Kirigami.Units.gridUnit * 16
         Layout.minimumHeight: Kirigami.Units.gridUnit * 20
         Layout.preferredWidth: Kirigami.Units.gridUnit * 20
