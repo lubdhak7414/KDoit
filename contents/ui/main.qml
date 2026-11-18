@@ -142,7 +142,13 @@ PlasmoidItem {
         return n
     }
 
-    preferredRepresentation: fullRepresentation
+    // On the desktop always embed the full UI. In panels, let Plasma choose:
+    // below the full view's minimum size (e.g. a 40px thick panel) it shows the
+    // compact icon, which opens the full view in a popup. These must match the
+    // Layout.minimumWidth/Height of fullRepresentation below.
+    preferredRepresentation: Plasmoid.formFactor === PlasmaCore.Types.Planar ? fullRepresentation : null
+    switchWidth: Kirigami.Units.gridUnit * 16
+    switchHeight: Kirigami.Units.gridUnit * 20
 
     // Keep the theme background by default; in edit mode the desktop offers a
     // "show background" toggle so users can switch to a transparent look.
@@ -151,11 +157,18 @@ PlasmoidItem {
     // On Wayland a panel is a layer-shell surface that never takes keyboard
     // focus. While a text field in the embedded view is active, ask the panel
     // for keyboard focus (AcceptingInputStatus), otherwise stay ActiveStatus.
-    // Not needed on the desktop, where the view is a normal window.
+    // Not needed on the desktop, where the view is a normal window, nor when the
+    // view is shown in a popup (which gets keyboard focus itself; flipping the
+    // status there makes the panel move focus around).
     property Item _inputItem: null
     property bool _inputSettling: false
+    // True when the full view lives in the same window as the applet (embedded
+    // in the panel) rather than in a separate popup window.
+    readonly property bool _fullEmbedded: fullRepresentationItem !== null
+                                          && fullRepresentationItem.Window.window === root.Window.window
     readonly property bool _wantsKeyboard: _inputItem !== null
                                            && Plasmoid.formFactor !== PlasmaCore.Types.Planar
+                                           && _fullEmbedded
     Plasmoid.status: _wantsKeyboard ? PlasmaCore.Types.AcceptingInputStatus
                                     : PlasmaCore.Types.ActiveStatus
 
@@ -295,12 +308,6 @@ PlasmoidItem {
             root._updateTrigger++
             root.dismissUndo()
             root.clearSelection()
-            // Abort any in-progress drag whose delegates may have been destroyed
-            // by the model change, preventing the ListView from staying frozen
-            // (interactive: !currentDragActive would remain false).
-            taskList.currentDragActive = false
-            taskList.dragSourceIndex = -1
-            taskList.dropTargetIndex = -1
             // If the user is viewing a sublist, refresh it from the updated task model
             // so remote sublist changes don't get overwritten by the stale snapshot.
             // Use UUID lookup -deletion propagation may have shifted model indices.
@@ -642,6 +649,19 @@ PlasmoidItem {
             target: fullRep.Window.window
             function onActiveFocusItemChanged() {
                 root._focusChanged(fullRep.Window.window.activeFocusItem)
+            }
+        }
+
+        // taskList lives in this component, so reset its drag state from here.
+        // Aborts any in-progress drag whose delegates may have been destroyed
+        // by the model change, so the ListView doesn't stay frozen
+        // (interactive: !currentDragActive would remain false).
+        Connections {
+            target: taskModel
+            function onModelReloaded() {
+                taskList.currentDragActive = false
+                taskList.dragSourceIndex = -1
+                taskList.dropTargetIndex = -1
             }
         }
 
