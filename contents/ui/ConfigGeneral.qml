@@ -38,7 +38,7 @@ KCM.SimpleKCM {
     property bool cfg_enableIcsExport
     property bool cfg_enableIcsExportDefault: false
     property string cfg_listTitle
-    property string cfg_listTitleDefault: "K Do it!"
+    property string cfg_listTitleDefault: ""
     property var _parsedManagedCategories: {
         try {
             var v = JSON.parse(root.cfg_managedCategories || '["Work","Personal","Education"]')
@@ -46,6 +46,21 @@ KCM.SimpleKCM {
         } catch(e) {
             return ["Work", "Personal", "Education"]
         }
+    }
+
+    // Returns the path to store ("" means the default location), or null when
+    // the text is not an absolute file path: a relative path or a folder would
+    // silently point the widget somewhere unexpected.
+    function _cleanPath(text) {
+        var v = text.trim()
+        if (v.startsWith("file://")) {
+            try { v = decodeURIComponent(v.substring(7)) } catch (e) { return null }
+        }
+        if (v === "")
+            return ""
+        if (!v.startsWith("/") || v.endsWith("/") || v.indexOf("'") !== -1 || v.indexOf("\n") !== -1)
+            return null
+        return v
     }
 
     title: i18n("General")
@@ -58,7 +73,8 @@ KCM.SimpleKCM {
             implicitWidth: Kirigami.Units.gridUnit * 20
             placeholderText: i18n("My To-Do List")
             Component.onCompleted: text = root.cfg_listTitle
-            onEditingFinished: root.cfg_listTitle = text.trim() || root.cfg_listTitleDefault
+            // Empty shows the built-in, translated title.
+            onEditingFinished: root.cfg_listTitle = text.trim()
         }
 
         Kirigami.Separator {
@@ -72,19 +88,10 @@ KCM.SimpleKCM {
             placeholderText: i18n("Leave empty for local storage")
             Component.onCompleted: text = root.cfg_storagePath
             onEditingFinished: {
-                var v = text.trim()
-                if (v.startsWith("file://")) {
-                    v = v.substring(7)
-                    try { v = decodeURIComponent(v) } catch (e) { v = "" }
-                }
-                // Absolute file paths only: a relative path or a folder would
-                // silently point the widget somewhere unexpected.
-                if (v.startsWith("/") && !v.endsWith("/") && v.indexOf("'") === -1 && v.indexOf("\n") === -1) {
+                var v = root._cleanPath(text)
+                if (v !== null)
                     root.cfg_storagePath = v
-                    text = v
-                } else {
-                    text = root.cfg_storagePath
-                }
+                text = root.cfg_storagePath
             }
         }
 
@@ -182,11 +189,10 @@ KCM.SimpleKCM {
             placeholderText: i18n("Leave empty to save next to JSON file")
             Component.onCompleted: text = root.cfg_markdownPath
             onEditingFinished: {
-                var v = text.trim()
-                if (v !== "" && v.indexOf("'") === -1 && v.indexOf("\n") === -1)
+                var v = root._cleanPath(text)
+                if (v !== null)
                     root.cfg_markdownPath = v
-                else
-                    text = root.cfg_markdownPath
+                text = root.cfg_markdownPath
             }
         }
 
