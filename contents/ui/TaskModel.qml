@@ -96,8 +96,52 @@ ListModel {
         return out.join("")
     }
 
+    // Base64 of the UTF-8 bytes of a string, done natively where Qt allows,
+    // since the JS encoder above takes ~160 ms for a 250 KB list on the
+    // shell's UI thread (the native paths ~25 ms):
+    //   "buffer"  Qt 6.12+: Qt.btoa(ArrayBuffer). Qt.btoa(string) is
+    //             deprecated there and logs a warning on use.
+    //   "string"  older Qt: Qt.btoa(string), which encodes UTF-8.
+    //   "js"      neither behaves as expected: the JS encoder.
+    readonly property string _base64Mode: _detectBase64Mode()
+
+    function _detectBase64Mode() {
+        try {
+            if (String(Qt.btoa(new Uint8Array([0xC3, 0xA9]).buffer)) === "w6k=")
+                return "buffer"
+        } catch (e) { }
+        try {
+            if (Qt.btoa("\u00e9\u2713\ud83d\ude80") === "w6ninJPwn5qA")
+                return "string"
+        } catch (e) { }
+        return "js"
+    }
+
+    function _utf8Buffer(str) {
+        var bin
+        try {
+            bin = unescape(encodeURIComponent(str))     // one char per UTF-8 byte
+        } catch (e) {
+            return new Uint8Array(_toUtf8Bytes(str)).buffer   // lone surrogates
+        }
+        var u = new Uint8Array(bin.length)
+        for (var i = 0; i < bin.length; i++)
+            u[i] = bin.charCodeAt(i)
+        return u.buffer
+    }
+
     function _base64(str) {
+        if (_base64Mode === "buffer")
+            return String(Qt.btoa(_utf8Buffer(str)))
+        if (_base64Mode === "string")
+            return Qt.btoa(str)
         return _base64Bytes(_toUtf8Bytes(str))
+    }
+
+    // Number of bytes a padded base64 string decodes to.
+    function _base64Length(b64) {
+        var pad = b64.endsWith("==") ? 2 : (b64.endsWith("=") ? 1 : 0)
+        return b64.length / 4 * 3 - pad
     }
 
     function _shellArg(s) {
@@ -294,8 +338,7 @@ ListModel {
     // Builds the command sequence for one atomic file write.
     // opts: { cas, expectSig, intent, backup, snapshot }
     function _buildWriteCmds(path, content, opts) {
-        var bytes = _toUtf8Bytes(content)
-        var b64 = _base64Bytes(bytes)
+        var b64 = _base64(content)
         var B = path + ".tmp." + _tmpToken + ".b64"
         var cmds = []
         cmds.push(_tag("w") + "mkdir -p -- " + _shellArg(_dirOf(path)) + " && : > " + _shellArg(B))
@@ -305,7 +348,7 @@ ListModel {
             "set -e; " +
             "P=" + _shellArg(path) + "; B=" + _shellArg(B) + "; " +
             "E=" + _shellArg(opts.expectSig || "") + "; I=" + _shellArg(opts.intent || "user") + "; " +
-            "N=" + bytes.length + "; CAS=" + (opts.cas ? 1 : 0) + "; BK=" + (opts.backup ? 1 : 0) + "; " +
+            "N=" + _base64Length(b64) + "; CAS=" + (opts.cas ? 1 : 0) + "; BK=" + (opts.backup ? 1 : 0) + "; " +
             "SNAP=" + (opts.snapshot ? 1 : 0) + "; TK=" + _tmpToken + "; T=; " +
             "trap 'rm -f -- \"$B\"; [ -n \"$T\" ] && rm -f -- \"$T\"; :' EXIT; " +
             "if [ -e \"$P\" ] || [ -L \"$P\" ]; then C=$(stat -L -c '%y %s' -- \"$P\" 2>/dev/null) || C=UNREADABLE; else C=MISSING; fi; " +

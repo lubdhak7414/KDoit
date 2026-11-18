@@ -470,6 +470,24 @@ TestCase {
         noTmpLeftovers(d)
     }
 
+    function test_15_native_base64_matches_js_encoder() {
+        // Qt.btoa(string) is deprecated in Qt 6.12 and warns on every use.
+        failOnWarning(/Qt\.btoa/)
+        var h = harness({ storagePath: tmp + "/t15-unused.json", migratedToFile: true })
+        var m = h.model
+        verify(m._base64Mode !== "js", "no native base64 on this Qt; writes use the slow JS encoder")
+        var s = "plain ✓ éè 日本語 🚀 'q' \"dq\" \\ $HOME `x` \u0000 \r\n end \ud83d"
+        for (var n = 0; n < 5; n++) {
+            var t = s.substring(n, s.length - n)
+            var js = m._base64Bytes(m._toUtf8Bytes(t))
+            if (m._base64Mode === "buffer" || t.indexOf("\ud83d end") === -1)
+                compare(m._base64(t), js, JSON.stringify(t))
+            compare(m._base64Length(js), m._toUtf8Bytes(t).length)
+        }
+        compare(m._base64(""), "")
+        settle(h)
+    }
+
     function test_14_malformed_fields_keep_every_task() {
         var d = mkdir("t14")
         var p = d + "/tasks.json"
