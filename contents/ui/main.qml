@@ -144,6 +144,10 @@ PlasmoidItem {
 
     preferredRepresentation: fullRepresentation
 
+    // Keep the theme background by default; in edit mode the desktop offers a
+    // "show background" toggle so users can switch to a transparent look.
+    Plasmoid.backgroundHints: PlasmaCore.Types.DefaultBackground | PlasmaCore.Types.ConfigurableBackground
+
     // On Wayland a panel is a layer-shell surface that never takes keyboard
     // focus. While a text field in the embedded view is active, ask the panel
     // for keyboard focus (AcceptingInputStatus), otherwise stay ActiveStatus.
