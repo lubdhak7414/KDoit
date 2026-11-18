@@ -77,7 +77,7 @@ PlasmaComponents.ItemDelegate {
     function isOverdue() {
         if (done || dueDate === "")
             return false
-        var today = new Date()
+        var today = root.todayDate
         var t = new Date(today.getFullYear(), today.getMonth(), today.getDate())
         var parts = dueDate.split("-")
         if (parts.length !== 3)
@@ -94,7 +94,7 @@ PlasmaComponents.ItemDelegate {
     function isToday() {
         if (dueDate === "")
             return false
-        var today = new Date()
+        var today = root.todayDate
         var parts = dueDate.split("-")
         if (parts.length !== 3)
             return false
@@ -140,7 +140,7 @@ PlasmaComponents.ItemDelegate {
         var due = new Date(year, month - 1, day)
         if (due.getFullYear() !== year || due.getMonth() !== month - 1 || due.getDate() !== day)
             return numeric
-        var now = new Date()
+        var now = root.todayDate
         var today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
         var diff = Math.round((due - today) / 86400000)
         if (diff === 0)

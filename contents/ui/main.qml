@@ -645,6 +645,22 @@ PlasmoidItem {
         _categoriesInitialized = true
     }
 
+    // Due-date labels compare against this instead of the clock, so they
+    // re-evaluate when it changes; it changes once a day, at midnight (or
+    // within a minute of waking from suspend).
+    property var todayDate: new Date()
+
+    Timer {
+        interval: 60000
+        repeat: true
+        running: true
+        onTriggered: {
+            var now = new Date()
+            if (now.toDateString() !== root.todayDate.toDateString())
+                root.todayDate = now
+        }
+    }
+
     Timer {
         id: undoTimer
         interval: 5000
