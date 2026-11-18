@@ -469,4 +469,33 @@ TestCase {
         verify(readFile(d + "/tasks.ics").indexOf("UID:u-a") !== -1)
         noTmpLeftovers(d)
     }
+
+    function test_14_malformed_fields_keep_every_task() {
+        var d = mkdir("t14")
+        var p = d + "/tasks.json"
+        // Hand-edited or foreign data: wrong field types and junk sublist
+        // entries. Every task must survive a load and the next save.
+        var a = task("u-a", "A", "2025-01-01T00:00:00.000Z")
+        a.title = 42
+        a.priority = "2"
+        var b = task(7, "B", "2025-01-01T00:00:00.000Z",
+                     [null, { uuid: "s-1", title: 5, done: true }, "junk"])
+        b.dueDate = null
+        var c = task("u-c", "C", "2025-01-01T00:00:00.000Z")
+        writeFile(p, doc([a, b, c]))
+        var h = harness({ storagePath: p, migratedToFile: true })
+        settle(h)
+        compare(titles(h.model), ["42", "B", "C"])
+        h.model.addTask("D", 1, false)
+        settle(h)
+        compare(h.model.storageError, "")
+        compare(fileTitles(p), ["42", "B", "C", "D"])
+        var byUuid = {}
+        JSON.parse(readFile(p)).tasks.forEach(function(t) { byUuid[t.uuid] = t })
+        compare(byUuid["u-a"].priority, 2)
+        compare(byUuid["7"].dueDate, "")
+        compare(byUuid["7"].sublist.length, 1)
+        compare(byUuid["7"].sublist[0].title, "5")
+        compare(byUuid["7"].sublist[0].done, true)
+    }
 }

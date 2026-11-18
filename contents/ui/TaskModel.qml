@@ -130,39 +130,52 @@ ListModel {
             setProperty(index, "modifiedAt", new Date().toISOString())
     }
 
+    // ListModel fixes each role's type on first insert and drops values of any
+    // other type, so every field is coerced to the type the model expects.
+    function _str(v) {
+        return (v === undefined || v === null) ? "" : String(v)
+    }
+
+    function _priority(v) {
+        if (v === undefined || v === null) return 1
+        var n = Math.round(Number(v))
+        return isNaN(n) ? 1 : Math.max(0, Math.min(2, n))
+    }
+
+    function _isObject(x) {
+        return x !== null && typeof x === "object"
+    }
+
     function normalizeTask(t) {
+        var uuid = _str(t.uuid)
         return {
-            uuid: (t.uuid != null && t.uuid !== "") ? t.uuid : newUuid(),
-            title: t.title != null ? t.title : "",
+            uuid: uuid !== "" ? uuid : newUuid(),
+            title: _str(t.title),
             done: t.done === true,
-            priority: t.priority != null ? t.priority : 1,
-            category: (t.category != null ? String(t.category) : "").trim(),
-            createdAt: t.createdAt != null ? t.createdAt : new Date().toISOString(),
-            modifiedAt: t.modifiedAt != null ? t.modifiedAt : new Date().toISOString(),
-            dueDate: t.dueDate != null ? t.dueDate : "",
+            priority: _priority(t.priority),
+            category: _str(t.category).trim(),
+            createdAt: t.createdAt != null ? String(t.createdAt) : new Date().toISOString(),
+            modifiedAt: t.modifiedAt != null ? String(t.modifiedAt) : new Date().toISOString(),
+            dueDate: _str(t.dueDate),
             sublist: normalizeSublist(t.sublist)
         }
+    }
+
+    function _normalizeSubItem(s) {
+        var uuid = _str(s.uuid)
+        return { uuid: uuid !== "" ? uuid : newUuid(), title: _str(s.title), done: s.done === true }
     }
 
     function normalizeSublist(sub) {
         var out = []
         if (Array.isArray(sub)) {
             for (var i = 0; i < sub.length; i++) {
-                out.push({
-                    uuid: (sub[i].uuid != null && sub[i].uuid !== "") ? sub[i].uuid : newUuid(),
-                    title: sub[i].title != null ? sub[i].title : "",
-                    done: sub[i].done === true
-                })
+                if (_isObject(sub[i]))
+                    out.push(_normalizeSubItem(sub[i]))
             }
         } else if (sub && typeof sub.count === "number" && typeof sub.get === "function") {
-            for (var j = 0; j < sub.count; j++) {
-                var e = sub.get(j)
-                out.push({
-                    uuid: (e.uuid != null && e.uuid !== "") ? e.uuid : newUuid(),
-                    title: e.title != null ? e.title : "",
-                    done: e.done === true
-                })
-            }
+            for (var j = 0; j < sub.count; j++)
+                out.push(_normalizeSubItem(sub.get(j)))
         }
         return out
     }
@@ -171,7 +184,7 @@ ListModel {
         if (!raw || raw === "" || raw === "[]") return []
         try {
             var parsed = JSON.parse(raw)
-            if (Array.isArray(parsed)) return parsed.filter(function(x) { return x != null })
+            if (Array.isArray(parsed)) return parsed.filter(_isObject)
             return []
         } catch(e) { return [] }
     }
@@ -367,7 +380,7 @@ ListModel {
             if (Array.isArray(doc.deleted)) deleted = doc.deleted
         }
         if (tasks === null) return null
-        tasks = tasks.filter(function(x) { return x != null && typeof x === "object" })
+        tasks = tasks.filter(_isObject)
         return { tasks: tasks, deleted: _tombsFromArray(deleted) }
     }
 
