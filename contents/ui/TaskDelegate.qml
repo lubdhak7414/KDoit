@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as Controls
@@ -184,12 +186,47 @@ PlasmaComponents.ItemDelegate {
         }
     }
 
+    // The menus and dialogs below are about 80% of a row's construction cost,
+    // and rows are created and destroyed as the list scrolls, so each row
+    // builds them the first time it needs one.
+    Loader {
+        id: popups
+        active: false
+        sourceComponent: popupsComponent
+    }
+
+    function _popups() {
+        popups.active = true
+        return popups.item
+    }
+
     function openMenu() {
         _capturePosition()
+        var p = _popups()
         if (delegate.isSublistItem)
-            sublistMenu.popup()
+            p.sublistMenu.popup()
         else
-            contextMenu.popup()
+            p.contextMenu.popup()
+    }
+
+    function openRenameDialog() {
+        var p = _popups()
+        p.renameField.text = delegate.title
+        positionPopup(p.renameDialog)
+        p.renameDialog.open()
+    }
+
+    function openCategoryDialog() {
+        var p = _popups()
+        p.categoryField.text = delegate.category
+        positionPopup(p.categoryDialog)
+        p.categoryDialog.open()
+    }
+
+    function openDateDialog() {
+        var p = _popups()
+        positionPopup(p.dateDialog)
+        p.dateDialog.open()
     }
 
     function positionPopup(popup) {
@@ -392,156 +429,10 @@ PlasmaComponents.ItemDelegate {
                 display: PlasmaComponents.AbstractButton.IconOnly
                 text: i18n("Edit task")
                 onClicked: {
-                    _capturePosition()
-                    renameField.text = delegate.title
-                    positionPopup(renameDialog)
-                    renameDialog.open()
+                    delegate._capturePosition()
+                    delegate.openRenameDialog()
                 }
             }
-        }
-    }
-
-    Controls.Menu {
-        id: contextMenu
-
-        Controls.MenuItem {
-            text: i18n("Open subtasks")
-            onTriggered: delegate.drillIntoSublist(delegate.index)
-        }
-
-        Controls.MenuSeparator {}
-
-        Controls.Menu {
-            title: i18n("Due date")
-
-            Controls.MenuItem {
-                text: i18n("Today")
-                onTriggered: {
-                    var d = new Date()
-                    delegate.listView.model.setProperty(delegate.index, "dueDate", delegate.toIso(d))
-                    delegate.emitTaskChanged()
-                }
-            }
-            Controls.MenuItem {
-                text: i18n("Tomorrow")
-                onTriggered: {
-                    var d = new Date()
-                    d.setDate(d.getDate() + 1)
-                    delegate.listView.model.setProperty(delegate.index, "dueDate", delegate.toIso(d))
-                    delegate.emitTaskChanged()
-                }
-            }
-            Controls.MenuItem {
-                text: i18n("Custom date...")
-                onTriggered: {
-                    positionPopup(dateDialog)
-                    dateDialog.open()
-                }
-            }
-            Controls.MenuItem {
-                text: i18n("Delete date")
-                onTriggered: {
-                    delegate.listView.model.setProperty(delegate.index, "dueDate", "")
-                    delegate.emitTaskChanged()
-                }
-            }
-        }
-
-        Controls.Menu {
-            title: i18n("Priority")
-
-            Controls.MenuItem {
-                text: i18n("High")
-                onTriggered: {
-                    delegate.listView.model.setProperty(delegate.index, "priority", 2)
-                    delegate.emitTaskChanged()
-                }
-            }
-            Controls.MenuItem {
-                text: i18n("Medium")
-                onTriggered: {
-                    delegate.listView.model.setProperty(delegate.index, "priority", 1)
-                    delegate.emitTaskChanged()
-                }
-            }
-            Controls.MenuItem {
-                text: i18n("Low")
-                onTriggered: {
-                    delegate.listView.model.setProperty(delegate.index, "priority", 0)
-                    delegate.emitTaskChanged()
-                }
-            }
-        }
-
-        Controls.Menu {
-            title: i18n("Category")
-
-            Controls.MenuItem {
-                text: i18n("None")
-                onTriggered: {
-                    delegate.listView.model.setProperty(delegate.index, "category", "")
-                    delegate.emitTaskChanged()
-                }
-            }
-
-            Controls.MenuSeparator {}
-
-            Repeater {
-                model: root.managedCategories
-                Controls.MenuItem {
-                    required property string modelData
-                    text: modelData
-                    onTriggered: {
-                        delegate.listView.model.setProperty(delegate.index, "category", modelData)
-                        delegate.emitTaskChanged()
-                    }
-                }
-            }
-
-            Controls.MenuSeparator {}
-
-            Controls.MenuItem {
-                text: i18n("Custom...")
-                onTriggered: {
-                    categoryField.text = delegate.category
-                    positionPopup(categoryDialog)
-                    categoryDialog.open()
-                }
-            }
-        }
-
-        Controls.MenuItem {
-            text: i18n("Rename...")
-            onTriggered: {
-                renameField.text = delegate.title
-                positionPopup(renameDialog)
-                renameDialog.open()
-            }
-        }
-
-        Controls.MenuSeparator {}
-
-        Controls.MenuItem {
-            text: i18n("Delete")
-            onTriggered: delegate.taskDeleted()
-        }
-    }
-
-    Controls.Menu {
-        id: sublistMenu
-
-        Controls.MenuItem {
-            text: i18n("Rename...")
-            onTriggered: {
-                renameField.text = delegate.title
-                positionPopup(renameDialog)
-                renameDialog.open()
-            }
-        }
-
-        Controls.MenuItem {
-            text: i18n("Delete")
-            onTriggered: delegate.taskDeleted()
         }
     }
 
@@ -551,206 +442,349 @@ PlasmaComponents.ItemDelegate {
         return d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (day < 10 ? "0" + day : day)
     }
 
-    Controls.Popup {
-        id: dateDialog
-        modal: true
-        closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
-        parent: _popupParent()
-        padding: Kirigami.Units.smallSpacing
-        implicitWidth: Kirigami.Units.gridUnit * 22
+    Component {
+        id: popupsComponent
 
-        onOpened: {
-            var parts = delegate.dueDate.split("-")
-            var now = new Date()
-            if (parts.length === 3) {
-                yearSpin.value = parseInt(parts[0])
-                monthSpin.value = parseInt(parts[1])
-                daySpin.value = parseInt(parts[2])
-            } else {
-                yearSpin.value = now.getFullYear()
-                monthSpin.value = now.getMonth() + 1
-                daySpin.value = now.getDate()
-            }
-        }
+        Item {
+            property alias contextMenu: contextMenu
+            property alias sublistMenu: sublistMenu
+            property alias dateDialog: dateDialog
+            property alias renameDialog: renameDialog
+            property alias renameField: renameField
+            property alias categoryDialog: categoryDialog
+            property alias categoryField: categoryField
 
-        contentItem: ColumnLayout {
-            spacing: Kirigami.Units.smallSpacing
+            Controls.Menu {
+                id: contextMenu
 
-            Kirigami.Heading {
-                level: 4
-                text: i18n("Custom date")
-                Layout.fillWidth: true
-            }
-
-            RowLayout {
-                spacing: Kirigami.Units.smallSpacing
-
-                PlasmaComponents.SpinBox {
-                    id: daySpin
-                    from: 1
-                    to: 31
+                Controls.MenuItem {
+                    text: i18n("Open subtasks")
+                    onTriggered: delegate.drillIntoSublist(delegate.index)
                 }
-                PlasmaComponents.SpinBox {
-                    id: monthSpin
-                    from: 1
-                    to: 12
-                    onValueChanged: {
-                        var maxDay = new Date(yearSpin.value, monthSpin.value, 0).getDate()
-                        daySpin.to = maxDay
-                        if (daySpin.value > maxDay) daySpin.value = maxDay
-                    }
-                }
-                PlasmaComponents.SpinBox {
-                    id: yearSpin
-                    from: 2000
-                    to: 2100
-                    onValueChanged: {
-                        var maxDay = new Date(yearSpin.value, monthSpin.value, 0).getDate()
-                        daySpin.to = maxDay
-                        if (daySpin.value > maxDay) daySpin.value = maxDay
-                    }
-                }
-            }
 
-            RowLayout {
-                spacing: Kirigami.Units.smallSpacing
-                Item { Layout.fillWidth: true }
-                PlasmaComponents.Button {
-                    icon.name: "dialog-cancel"
-                    display: PlasmaComponents.AbstractButton.IconOnly
-                    text: i18n("Cancel")
-                    onClicked: dateDialog.close()
-                }
-                PlasmaComponents.Button {
-                    icon.name: "dialog-ok"
-                    display: PlasmaComponents.AbstractButton.IconOnly
-                    text: i18n("OK")
-                    onClicked: {
-                        var m = monthSpin.value
-                        var day = daySpin.value
-                        var iso = yearSpin.value + "-" + (m < 10 ? "0" + m : m) + "-" + (day < 10 ? "0" + day : day)
-                        delegate.listView.model.setProperty(delegate.index, "dueDate", iso)
-                        delegate.emitTaskChanged()
-                        dateDialog.close()
-                    }
-                }
-            }
-        }
-    }
+                Controls.MenuSeparator {}
 
-    Controls.Popup {
-        id: renameDialog
-        modal: true
-        closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
-        parent: _popupParent()
-        padding: Kirigami.Units.smallSpacing
-        implicitWidth: Kirigami.Units.gridUnit * 16
+                Controls.Menu {
+                    title: i18n("Due date")
 
-        onOpened: renameField.forceActiveFocus()
-
-        contentItem: ColumnLayout {
-            spacing: Kirigami.Units.smallSpacing
-
-            Kirigami.Heading {
-                level: 4
-                text: i18n("Rename task")
-                Layout.fillWidth: true
-            }
-
-            PlasmaComponents.TextField {
-                id: renameField
-                implicitWidth: Kirigami.Units.gridUnit * 14
-                onAccepted: {
-                    var text = renameField.text.trim()
-                    if (text.length > 0) {
-                        delegate.listView.model.setProperty(delegate.index, "title", text)
-                        delegate.emitTaskChanged()
-                    }
-                    renameDialog.close()
-                }
-            }
-
-            RowLayout {
-                spacing: Kirigami.Units.smallSpacing
-                Item { Layout.fillWidth: true }
-                PlasmaComponents.Button {
-                    icon.name: "dialog-cancel"
-                    display: PlasmaComponents.AbstractButton.IconOnly
-                    text: i18n("Cancel")
-                    onClicked: renameDialog.close()
-                }
-                PlasmaComponents.Button {
-                    icon.name: "dialog-ok"
-                    display: PlasmaComponents.AbstractButton.IconOnly
-                    text: i18n("OK")
-                    onClicked: {
-                        var text = renameField.text.trim()
-                        if (text.length > 0) {
-                            delegate.listView.model.setProperty(delegate.index, "title", text)
+                    Controls.MenuItem {
+                        text: i18n("Today")
+                        onTriggered: {
+                            var d = new Date()
+                            delegate.listView.model.setProperty(delegate.index, "dueDate", delegate.toIso(d))
                             delegate.emitTaskChanged()
                         }
-                        renameDialog.close()
                     }
-                }
-            }
-        }
-    }
-
-    Controls.Popup {
-        id: categoryDialog
-        modal: true
-        closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
-        parent: _popupParent()
-        padding: Kirigami.Units.smallSpacing
-        implicitWidth: Kirigami.Units.gridUnit * 16
-
-        onOpened: categoryField.forceActiveFocus()
-
-        contentItem: ColumnLayout {
-            spacing: Kirigami.Units.smallSpacing
-
-            Kirigami.Heading {
-                level: 4
-                text: i18n("Set category")
-                Layout.fillWidth: true
-            }
-
-            PlasmaComponents.TextField {
-                id: categoryField
-                implicitWidth: Kirigami.Units.gridUnit * 14
-                placeholderText: i18n("Category name...")
-                onAccepted: {
-                    var text = categoryField.text.trim()
-                    if (text.length > 0) {
-                        root.addManagedCategory(text)
-                        delegate.listView.model.setProperty(delegate.index, "category", text)
-                        delegate.emitTaskChanged()
-                    }
-                    categoryDialog.close()
-                }
-            }
-
-            RowLayout {
-                spacing: Kirigami.Units.smallSpacing
-                Item { Layout.fillWidth: true }
-                PlasmaComponents.Button {
-                    icon.name: "dialog-cancel"
-                    display: PlasmaComponents.AbstractButton.IconOnly
-                    text: i18n("Cancel")
-                    onClicked: categoryDialog.close()
-                }
-                PlasmaComponents.Button {
-                    icon.name: "dialog-ok"
-                    display: PlasmaComponents.AbstractButton.IconOnly
-                    text: i18n("OK")
-                    onClicked: {
-                        var text = categoryField.text.trim()
-                        if (text.length > 0) {
-                            root.addManagedCategory(text)
-                            delegate.listView.model.setProperty(delegate.index, "category", text)
+                    Controls.MenuItem {
+                        text: i18n("Tomorrow")
+                        onTriggered: {
+                            var d = new Date()
+                            d.setDate(d.getDate() + 1)
+                            delegate.listView.model.setProperty(delegate.index, "dueDate", delegate.toIso(d))
                             delegate.emitTaskChanged()
                         }
-                        categoryDialog.close()
+                    }
+                    Controls.MenuItem {
+                        text: i18n("Custom date...")
+                        onTriggered: delegate.openDateDialog()
+                    }
+                    Controls.MenuItem {
+                        text: i18n("Delete date")
+                        onTriggered: {
+                            delegate.listView.model.setProperty(delegate.index, "dueDate", "")
+                            delegate.emitTaskChanged()
+                        }
+                    }
+                }
+
+                Controls.Menu {
+                    title: i18n("Priority")
+
+                    Controls.MenuItem {
+                        text: i18n("High")
+                        onTriggered: {
+                            delegate.listView.model.setProperty(delegate.index, "priority", 2)
+                            delegate.emitTaskChanged()
+                        }
+                    }
+                    Controls.MenuItem {
+                        text: i18n("Medium")
+                        onTriggered: {
+                            delegate.listView.model.setProperty(delegate.index, "priority", 1)
+                            delegate.emitTaskChanged()
+                        }
+                    }
+                    Controls.MenuItem {
+                        text: i18n("Low")
+                        onTriggered: {
+                            delegate.listView.model.setProperty(delegate.index, "priority", 0)
+                            delegate.emitTaskChanged()
+                        }
+                    }
+                }
+
+                Controls.Menu {
+                    title: i18n("Category")
+
+                    Controls.MenuItem {
+                        text: i18n("None")
+                        onTriggered: {
+                            delegate.listView.model.setProperty(delegate.index, "category", "")
+                            delegate.emitTaskChanged()
+                        }
+                    }
+
+                    Controls.MenuSeparator {}
+
+                    Repeater {
+                        model: root.managedCategories
+                        Controls.MenuItem {
+                            required property string modelData
+                            text: modelData
+                            onTriggered: {
+                                delegate.listView.model.setProperty(delegate.index, "category", modelData)
+                                delegate.emitTaskChanged()
+                            }
+                        }
+                    }
+
+                    Controls.MenuSeparator {}
+
+                    Controls.MenuItem {
+                        text: i18n("Custom...")
+                        onTriggered: delegate.openCategoryDialog()
+                    }
+                }
+
+                Controls.MenuItem {
+                    text: i18n("Rename...")
+                    onTriggered: delegate.openRenameDialog()
+                }
+
+                Controls.MenuSeparator {}
+
+                Controls.MenuItem {
+                    text: i18n("Delete")
+                    onTriggered: delegate.taskDeleted()
+                }
+            }
+
+            Controls.Menu {
+                id: sublistMenu
+
+                Controls.MenuItem {
+                    text: i18n("Rename...")
+                    onTriggered: delegate.openRenameDialog()
+                }
+
+                Controls.MenuItem {
+                    text: i18n("Delete")
+                    onTriggered: delegate.taskDeleted()
+                }
+            }
+
+            Controls.Popup {
+                id: dateDialog
+                modal: true
+                closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
+                parent: delegate._popupParent()
+                padding: Kirigami.Units.smallSpacing
+                implicitWidth: Kirigami.Units.gridUnit * 22
+
+                onOpened: {
+                    var parts = delegate.dueDate.split("-")
+                    var now = new Date()
+                    if (parts.length === 3) {
+                        yearSpin.value = parseInt(parts[0])
+                        monthSpin.value = parseInt(parts[1])
+                        daySpin.value = parseInt(parts[2])
+                    } else {
+                        yearSpin.value = now.getFullYear()
+                        monthSpin.value = now.getMonth() + 1
+                        daySpin.value = now.getDate()
+                    }
+                }
+
+                contentItem: ColumnLayout {
+                    spacing: Kirigami.Units.smallSpacing
+
+                    Kirigami.Heading {
+                        level: 4
+                        text: i18n("Custom date")
+                        Layout.fillWidth: true
+                    }
+
+                    RowLayout {
+                        spacing: Kirigami.Units.smallSpacing
+
+                        PlasmaComponents.SpinBox {
+                            id: daySpin
+                            from: 1
+                            to: 31
+                        }
+                        PlasmaComponents.SpinBox {
+                            id: monthSpin
+                            from: 1
+                            to: 12
+                            onValueChanged: {
+                                var maxDay = new Date(yearSpin.value, monthSpin.value, 0).getDate()
+                                daySpin.to = maxDay
+                                if (daySpin.value > maxDay) daySpin.value = maxDay
+                            }
+                        }
+                        PlasmaComponents.SpinBox {
+                            id: yearSpin
+                            from: 2000
+                            to: 2100
+                            onValueChanged: {
+                                var maxDay = new Date(yearSpin.value, monthSpin.value, 0).getDate()
+                                daySpin.to = maxDay
+                                if (daySpin.value > maxDay) daySpin.value = maxDay
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        Item { Layout.fillWidth: true }
+                        PlasmaComponents.Button {
+                            icon.name: "dialog-cancel"
+                            display: PlasmaComponents.AbstractButton.IconOnly
+                            text: i18n("Cancel")
+                            onClicked: dateDialog.close()
+                        }
+                        PlasmaComponents.Button {
+                            icon.name: "dialog-ok"
+                            display: PlasmaComponents.AbstractButton.IconOnly
+                            text: i18n("OK")
+                            onClicked: {
+                                var m = monthSpin.value
+                                var day = daySpin.value
+                                var iso = yearSpin.value + "-" + (m < 10 ? "0" + m : m) + "-" + (day < 10 ? "0" + day : day)
+                                delegate.listView.model.setProperty(delegate.index, "dueDate", iso)
+                                delegate.emitTaskChanged()
+                                dateDialog.close()
+                            }
+                        }
+                    }
+                }
+            }
+
+            Controls.Popup {
+                id: renameDialog
+                modal: true
+                closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
+                parent: delegate._popupParent()
+                padding: Kirigami.Units.smallSpacing
+                implicitWidth: Kirigami.Units.gridUnit * 16
+
+                onOpened: renameField.forceActiveFocus()
+
+                contentItem: ColumnLayout {
+                    spacing: Kirigami.Units.smallSpacing
+
+                    Kirigami.Heading {
+                        level: 4
+                        text: i18n("Rename task")
+                        Layout.fillWidth: true
+                    }
+
+                    PlasmaComponents.TextField {
+                        id: renameField
+                        implicitWidth: Kirigami.Units.gridUnit * 14
+                        onAccepted: {
+                            var text = renameField.text.trim()
+                            if (text.length > 0) {
+                                delegate.listView.model.setProperty(delegate.index, "title", text)
+                                delegate.emitTaskChanged()
+                            }
+                            renameDialog.close()
+                        }
+                    }
+
+                    RowLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        Item { Layout.fillWidth: true }
+                        PlasmaComponents.Button {
+                            icon.name: "dialog-cancel"
+                            display: PlasmaComponents.AbstractButton.IconOnly
+                            text: i18n("Cancel")
+                            onClicked: renameDialog.close()
+                        }
+                        PlasmaComponents.Button {
+                            icon.name: "dialog-ok"
+                            display: PlasmaComponents.AbstractButton.IconOnly
+                            text: i18n("OK")
+                            onClicked: {
+                                var text = renameField.text.trim()
+                                if (text.length > 0) {
+                                    delegate.listView.model.setProperty(delegate.index, "title", text)
+                                    delegate.emitTaskChanged()
+                                }
+                                renameDialog.close()
+                            }
+                        }
+                    }
+                }
+            }
+
+            Controls.Popup {
+                id: categoryDialog
+                modal: true
+                closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
+                parent: delegate._popupParent()
+                padding: Kirigami.Units.smallSpacing
+                implicitWidth: Kirigami.Units.gridUnit * 16
+
+                onOpened: categoryField.forceActiveFocus()
+
+                contentItem: ColumnLayout {
+                    spacing: Kirigami.Units.smallSpacing
+
+                    Kirigami.Heading {
+                        level: 4
+                        text: i18n("Set category")
+                        Layout.fillWidth: true
+                    }
+
+                    PlasmaComponents.TextField {
+                        id: categoryField
+                        implicitWidth: Kirigami.Units.gridUnit * 14
+                        placeholderText: i18n("Category name...")
+                        onAccepted: {
+                            var text = categoryField.text.trim()
+                            if (text.length > 0) {
+                                root.addManagedCategory(text)
+                                delegate.listView.model.setProperty(delegate.index, "category", text)
+                                delegate.emitTaskChanged()
+                            }
+                            categoryDialog.close()
+                        }
+                    }
+
+                    RowLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        Item { Layout.fillWidth: true }
+                        PlasmaComponents.Button {
+                            icon.name: "dialog-cancel"
+                            display: PlasmaComponents.AbstractButton.IconOnly
+                            text: i18n("Cancel")
+                            onClicked: categoryDialog.close()
+                        }
+                        PlasmaComponents.Button {
+                            icon.name: "dialog-ok"
+                            display: PlasmaComponents.AbstractButton.IconOnly
+                            text: i18n("OK")
+                            onClicked: {
+                                var text = categoryField.text.trim()
+                                if (text.length > 0) {
+                                    root.addManagedCategory(text)
+                                    delegate.listView.model.setProperty(delegate.index, "category", text)
+                                    delegate.emitTaskChanged()
+                                }
+                                categoryDialog.close()
+                            }
+                        }
                     }
                 }
             }
